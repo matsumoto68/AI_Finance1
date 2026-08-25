@@ -219,8 +219,14 @@
 2. WHEN Shell_ScriptをLinux_Envで実行したとき、THE Linux_Env SHALL 全出力ログを生成する。
 3. WHEN Shell_ScriptがファイルやディレクトリをLinux_Env上で作成または削除したとき、THE Linux_Env SHALL その作成・削除結果をログに記録する。
 4. WHEN 外部シェルと連携する処理が実行されたとき、THE Linux_Env SHALL 外部シェル連携結果をログに記録する。（※外部シェル連携結果の取得は本スコープ外とする）
-5. WHEN 試験が完了したとき、THE Dev_Team SHALL 全出力ログ・ファイル削除結果をKiroに入力し、証跡として整理・記録する。
+5. WHEN 試験が完了したとき、THE Dev_Team SHALL 全出力ログ・ファイル/ディレクトリ作成・削除結果をKiroに入力し、証跡として整理・記録する。
 6. WHEN Kiroが証跡を整理したとき、THE Dev_Team SHALL 内容を確認して確定する。
+
+---
+
+### 機能要件6：（欠番）
+
+> ※ 機能要件6 は当初定義されていた総合試験の実施と証跡取得に相当するが、総合試験はスコープ外となったため欠番とする。
 
 ---
 
