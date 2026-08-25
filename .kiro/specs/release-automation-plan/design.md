@@ -55,6 +55,7 @@ KiroはAIコーディングアシスタントとして各工程を補助する�
 | 工程 | 成果物 | 作成方法 |
 |------|--------|----------|
 | 要件定義 | 要件定義書 | Kiroがドラフト生成 → 人がレビュー |
+| 要件定義 | 自動化対象コマンド一覧 | 手動コマンド手順書（test_data_CommandA.xlsx）より抽出・整理 |
 | 設計 | 外部設計書 | Kiroがドラフト生成 → 人がレビュー・修正 |
 | 設計 | 内部設計書 | Kiroがドラフト生成 → 人がレビュー・修正 |
 | 設計 | ディレクトリ定義書 | Kiroがコードから自動生成 |
@@ -81,6 +82,42 @@ KiroはAIコーディングアシスタントとして各工程を補助する�
 
 - 外部シェル連携結果の取得・確認
 - Linux環境のサーバ構築・インフラ管理
+
+---
+
+### 2.5 自動化対象コマンド一覧
+
+`test_data_CommandA.xlsx`（手動コマンド手順書）に記載された全コマンドを自動化の対象とする。
+
+| 項番 | コマンドの内容 | Linuxコマンド |
+|------|--------------|--------------|
+| 1 | ディレクトリ作成 | `mkdir /tmp/testdir` |
+| 2 | ディレクトリ作成（既存） | `mkdir /tmp/testdir` |
+| 3 | ディレクトリ作成（権限なし） | `mkdir /root/noperm` |
+| 4 | ファイル作成（touch） | `touch /tmp/testdir/test.txt` |
+| 5 | ファイル作成（echo） | `echo hello > /tmp/testdir/data.txt` |
+| 6 | ファイル内容確認 | `cat /tmp/testdir/data.txt` |
+| 7 | ディレクトリ移動 | `cd /tmp/testdir` |
+| 8 | ディレクトリ移動（存在しない） | `cd /tmp/notexist` |
+| 9 | ファイルコピー | `cp /tmp/testdir/data.txt /tmp/testdir/data_bk.txt` |
+| 10 | ファイルコピー（上書き） | `cp -f /tmp/testdir/data.txt /tmp/testdir/data_bk.txt` |
+| 11 | ディレクトリコピー | `cp -r /tmp/testdir /tmp/testdir_bk` |
+| 12 | ファイル移動（リネーム） | `mv /tmp/testdir/test.txt /tmp/testdir/renamed.txt` |
+| 13 | ファイル削除 | `rm /tmp/testdir/data_bk.txt` |
+| 14 | ファイル削除（存在しない） | `rm /tmp/testdir/notexist.txt` |
+| 15 | ディレクトリ削除（空） | `rmdir /tmp/testdir_bk` |
+| 16 | ディレクトリ削除（非空） | `rmdir /tmp/testdir` |
+| 17 | ディレクトリ強制削除 | `rm -rf /tmp/testdir` |
+| 18 | サービス起動 | `systemctl start nginx` |
+| 19 | サービス起動（失敗） | `systemctl start nginx` |
+| 20 | 起動確認 | `systemctl is-active nginx` |
+| 21 | サービス停止 | `systemctl stop nginx` |
+| 22 | 停止確認 | `systemctl is-active nginx` |
+| 23 | サービス状態確認 | `systemctl status nginx` |
+| 24 | 一覧表示（ls） | `ls -la /tmp` |
+| 25 | ファイル権限変更 | `chmod 755 /tmp/testfile.sh` |
+
+> 出典：`test_data_CommandA.xlsx`（手動コマンド手順書、matsumoto68/AI_Finance1 mainブランチ）
 
 ---
 
