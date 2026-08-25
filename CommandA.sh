@@ -96,9 +96,11 @@ check_str() {
 # 初期化処理
 # ============================================================
 init_log() {
+    local rc
     if [ ! -d "${LOG_DIR}" ]; then
         mkdir -p "${LOG_DIR}"
-        if [ $? -ne 0 ]; then
+        rc=$?
+        if [ "${rc}" -ne 0 ]; then
             echo "[ERROR] E001: ログディレクトリ作成失敗: ${LOG_DIR}" >&2
             exit 1
         fi
@@ -133,64 +135,65 @@ check_env() {
 # ディレクトリ操作処理
 # ============================================================
 proc_dir() {
+    local out rc
     log_info "ディレクトリ操作処理 開始"
 
     # ステップ1: ディレクトリ作成（正常）
     log_cmd "mkdir ${WORK_DIR}"
-    mkdir "${WORK_DIR}"
-    check_rc $? 0 "E101" "ディレクトリ作成失敗: ${WORK_DIR}"
+    mkdir "${WORK_DIR}"; rc=$?
+    check_rc "${rc}" 0 "E101" "ディレクトリ作成失敗: ${WORK_DIR}"
     log_info "ディレクトリ作成完了: ${WORK_DIR}"
 
     # ステップ2: ディレクトリ作成（既存・エラー確認）
     log_cmd "mkdir ${WORK_DIR} 2>&1"
-    out=$(mkdir "${WORK_DIR}" 2>&1)
-    log_rc $?
+    out=$(mkdir "${WORK_DIR}" 2>&1); rc=$?
+    log_rc "${rc}"
     check_str "${out}" "File exists" "must_not_contain" "E101" "ディレクトリ作成失敗（既存）: ${WORK_DIR}"
     log_info "ディレクトリ作成（既存）エラー確認完了"
 
     # ステップ3: ディレクトリ作成（権限なし・エラー確認）
     log_cmd "mkdir /root/noperm 2>&1"
-    out=$(mkdir /root/noperm 2>&1)
-    log_rc $?
+    out=$(mkdir /root/noperm 2>&1); rc=$?
+    log_rc "${rc}"
     check_str "${out}" "Permission denied" "must_not_contain" "E102" "ディレクトリ作成失敗（権限なし）: /root/noperm"
     log_info "ディレクトリ作成（権限なし）エラー確認完了"
 
     # ステップ4: ディレクトリ移動（正常）
     log_cmd "cd ${WORK_DIR}"
-    cd "${WORK_DIR}"
-    check_rc $? 0 "E103" "ディレクトリ移動失敗: ${WORK_DIR}"
+    cd "${WORK_DIR}"; rc=$?
+    check_rc "${rc}" 0 "E103" "ディレクトリ移動失敗: ${WORK_DIR}"
     log_info "ディレクトリ移動完了: ${WORK_DIR}"
 
     # ステップ5: ディレクトリ移動（不存在・エラー確認）
     log_cmd "cd /tmp/notexist 2>&1"
-    out=$(cd /tmp/notexist 2>&1)
-    log_rc $?
+    out=$(cd /tmp/notexist 2>&1); rc=$?
+    log_rc "${rc}"
     check_str "${out}" "No such file or directory" "must_not_contain" "E103" "ディレクトリ移動失敗（不存在）: /tmp/notexist"
     log_info "ディレクトリ移動（不存在）エラー確認完了"
 
     # ステップ6: ディレクトリコピー
     log_cmd "cp -r ${WORK_DIR} ${WORK_DIR_BK}"
-    cp -r "${WORK_DIR}" "${WORK_DIR_BK}"
-    check_rc $? 0 "E104" "ディレクトリコピー失敗: ${WORK_DIR} -> ${WORK_DIR_BK}"
+    cp -r "${WORK_DIR}" "${WORK_DIR_BK}"; rc=$?
+    check_rc "${rc}" 0 "E104" "ディレクトリコピー失敗: ${WORK_DIR} -> ${WORK_DIR_BK}"
     log_info "ディレクトリコピー完了: ${WORK_DIR_BK}"
 
     # ステップ7: ディレクトリ削除（空）
     log_cmd "rmdir ${WORK_DIR_BK}"
-    rmdir "${WORK_DIR_BK}"
-    check_rc $? 0 "E105" "ディレクトリ削除失敗（空）: ${WORK_DIR_BK}"
+    rmdir "${WORK_DIR_BK}"; rc=$?
+    check_rc "${rc}" 0 "E105" "ディレクトリ削除失敗（空）: ${WORK_DIR_BK}"
     log_info "ディレクトリ削除（空）完了: ${WORK_DIR_BK}"
 
     # ステップ8: ディレクトリ削除（非空・エラー確認）
     log_cmd "rmdir ${WORK_DIR} 2>&1"
-    out=$(rmdir "${WORK_DIR}" 2>&1)
-    log_rc $?
+    out=$(rmdir "${WORK_DIR}" 2>&1); rc=$?
+    log_rc "${rc}"
     check_str "${out}" "Directory not empty" "must_not_contain" "E105" "ディレクトリ削除失敗（非空）: ${WORK_DIR}"
     log_info "ディレクトリ削除（非空）エラー確認完了"
 
     # ステップ9: ディレクトリ強制削除
     log_cmd "rm -rf ${WORK_DIR}"
-    rm -rf "${WORK_DIR}"
-    check_rc $? 0 "E106" "ディレクトリ強制削除失敗: ${WORK_DIR}"
+    rm -rf "${WORK_DIR}"; rc=$?
+    check_rc "${rc}" 0 "E106" "ディレクトリ強制削除失敗: ${WORK_DIR}"
     log_info "ディレクトリ強制削除完了: ${WORK_DIR}"
 
     log_info "ディレクトリ操作処理 完了"
@@ -200,6 +203,7 @@ proc_dir() {
 # ファイル操作処理（proc_dir 実行後に再度 WORK_DIR を作成して実施）
 # ============================================================
 proc_file() {
+    local out rc
     log_info "ファイル操作処理 開始"
 
     # ファイル操作用にWORK_DIRを再作成
@@ -207,51 +211,51 @@ proc_file() {
 
     # ステップ1: ファイル作成（touch）
     log_cmd "touch ${TARGET_FILE}"
-    touch "${TARGET_FILE}"
-    check_rc $? 0 "E201" "ファイル作成失敗（touch）: ${TARGET_FILE}"
+    touch "${TARGET_FILE}"; rc=$?
+    check_rc "${rc}" 0 "E201" "ファイル作成失敗（touch）: ${TARGET_FILE}"
     log_info "ファイル作成（touch）完了: ${TARGET_FILE}"
 
     # ステップ2: ファイル作成（echo）
     log_cmd "echo hello > ${DATA_FILE}"
-    echo hello > "${DATA_FILE}"
-    check_rc $? 0 "E202" "ファイル作成失敗（echo）: ${DATA_FILE}"
+    echo hello > "${DATA_FILE}"; rc=$?
+    check_rc "${rc}" 0 "E202" "ファイル作成失敗（echo）: ${DATA_FILE}"
     log_info "ファイル作成（echo）完了: ${DATA_FILE}"
 
     # ステップ3: ファイル内容確認
     log_cmd "cat ${DATA_FILE}"
-    out=$(cat "${DATA_FILE}")
-    check_rc $? 0 "E203" "ファイル内容確認失敗: ${DATA_FILE}"
+    out=$(cat "${DATA_FILE}"); rc=$?
+    check_rc "${rc}" 0 "E203" "ファイル内容確認失敗: ${DATA_FILE}"
     check_str "${out}" "hello" "must_contain" "E203" "ファイル内容確認失敗（hello が含まれない）: ${DATA_FILE}"
     log_info "ファイル内容確認完了: ${DATA_FILE}"
 
     # ステップ4: ファイルコピー
     log_cmd "cp ${DATA_FILE} ${DATA_BK_FILE}"
-    cp "${DATA_FILE}" "${DATA_BK_FILE}"
-    check_rc $? 0 "E204" "ファイルコピー失敗: ${DATA_FILE} -> ${DATA_BK_FILE}"
+    cp "${DATA_FILE}" "${DATA_BK_FILE}"; rc=$?
+    check_rc "${rc}" 0 "E204" "ファイルコピー失敗: ${DATA_FILE} -> ${DATA_BK_FILE}"
     log_info "ファイルコピー完了: ${DATA_BK_FILE}"
 
     # ステップ5: ファイルコピー（上書き）
     log_cmd "cp -f ${DATA_FILE} ${DATA_BK_FILE}"
-    cp -f "${DATA_FILE}" "${DATA_BK_FILE}"
-    check_rc $? 0 "E204" "ファイルコピー（上書き）失敗: ${DATA_FILE} -> ${DATA_BK_FILE}"
+    cp -f "${DATA_FILE}" "${DATA_BK_FILE}"; rc=$?
+    check_rc "${rc}" 0 "E204" "ファイルコピー（上書き）失敗: ${DATA_FILE} -> ${DATA_BK_FILE}"
     log_info "ファイルコピー（上書き）完了: ${DATA_BK_FILE}"
 
     # ステップ6: ファイル移動（リネーム）
     log_cmd "mv ${TARGET_FILE} ${RENAMED_FILE}"
-    mv "${TARGET_FILE}" "${RENAMED_FILE}"
-    check_rc $? 0 "E205" "ファイル移動（リネーム）失敗: ${TARGET_FILE} -> ${RENAMED_FILE}"
+    mv "${TARGET_FILE}" "${RENAMED_FILE}"; rc=$?
+    check_rc "${rc}" 0 "E205" "ファイル移動（リネーム）失敗: ${TARGET_FILE} -> ${RENAMED_FILE}"
     log_info "ファイル移動（リネーム）完了: ${RENAMED_FILE}"
 
     # ステップ7: ファイル削除
     log_cmd "rm ${DATA_BK_FILE}"
-    rm "${DATA_BK_FILE}"
-    check_rc $? 0 "E206" "ファイル削除失敗: ${DATA_BK_FILE}"
+    rm "${DATA_BK_FILE}"; rc=$?
+    check_rc "${rc}" 0 "E206" "ファイル削除失敗: ${DATA_BK_FILE}"
     log_info "ファイル削除完了: ${DATA_BK_FILE}"
 
     # ステップ8: ファイル削除（不存在・エラー確認）
     log_cmd "rm /tmp/testdir/notexist.txt 2>&1"
-    out=$(rm /tmp/testdir/notexist.txt 2>&1)
-    log_rc $?
+    out=$(rm /tmp/testdir/notexist.txt 2>&1); rc=$?
+    log_rc "${rc}"
     check_str "${out}" "No such file or directory" "must_not_contain" "E206" "ファイル削除失敗（不存在）: /tmp/testdir/notexist.txt"
     log_info "ファイル削除（不存在）エラー確認完了"
 
@@ -262,45 +266,46 @@ proc_file() {
 # サービス操作処理
 # ============================================================
 proc_service() {
+    local out rc
     log_info "サービス操作処理 開始"
 
     # ステップ1: サービス起動
     log_cmd "systemctl start ${SERVICE_NAME}"
-    systemctl start "${SERVICE_NAME}"
-    check_rc $? 0 "E301" "サービス起動失敗: ${SERVICE_NAME}"
+    systemctl start "${SERVICE_NAME}"; rc=$?
+    check_rc "${rc}" 0 "E301" "サービス起動失敗: ${SERVICE_NAME}"
     log_info "サービス起動完了: ${SERVICE_NAME}"
 
     # ステップ2: サービス起動失敗確認（エラーメッセージチェック）
     log_cmd "systemctl start ${SERVICE_NAME} 2>&1"
-    out=$(systemctl start "${SERVICE_NAME}" 2>&1)
-    log_rc $?
+    out=$(systemctl start "${SERVICE_NAME}" 2>&1); rc=$?
+    log_rc "${rc}"
     check_str "${out}" "Failed" "must_not_contain" "E301" "サービス起動失敗（Failed検出）: ${SERVICE_NAME}"
     log_info "サービス起動失敗確認完了"
 
     # ステップ3: 起動確認
     log_cmd "systemctl is-active ${SERVICE_NAME}"
-    out=$(systemctl is-active "${SERVICE_NAME}")
-    check_rc $? 0 "E302" "サービス起動確認失敗: ${SERVICE_NAME}"
+    out=$(systemctl is-active "${SERVICE_NAME}"); rc=$?
+    check_rc "${rc}" 0 "E302" "サービス起動確認失敗: ${SERVICE_NAME}"
     check_str "${out}" "active" "must_contain" "E302" "サービス起動確認失敗（active でない）: ${SERVICE_NAME}"
     log_info "起動確認完了: ${SERVICE_NAME}"
 
     # ステップ4: サービス停止
     log_cmd "systemctl stop ${SERVICE_NAME}"
-    systemctl stop "${SERVICE_NAME}"
-    check_rc $? 0 "E303" "サービス停止失敗: ${SERVICE_NAME}"
+    systemctl stop "${SERVICE_NAME}"; rc=$?
+    check_rc "${rc}" 0 "E303" "サービス停止失敗: ${SERVICE_NAME}"
     log_info "サービス停止完了: ${SERVICE_NAME}"
 
     # ステップ5: 停止確認
     log_cmd "systemctl is-active ${SERVICE_NAME}"
-    out=$(systemctl is-active "${SERVICE_NAME}")
-    log_rc $?
+    out=$(systemctl is-active "${SERVICE_NAME}"); rc=$?
+    log_rc "${rc}"
     check_str "${out}" "inactive" "must_contain" "E304" "サービス停止確認失敗（inactive でない）: ${SERVICE_NAME}"
     log_info "停止確認完了: ${SERVICE_NAME}"
 
     # ステップ6: サービス状態確認
     log_cmd "systemctl status ${SERVICE_NAME}"
-    out=$(systemctl status "${SERVICE_NAME}" 2>&1)
-    log_rc $?
+    out=$(systemctl status "${SERVICE_NAME}" 2>&1); rc=$?
+    log_rc "${rc}"
     check_str "${out}" "Active" "must_contain" "E305" "サービス状態確認失敗（Active が含まれない）: ${SERVICE_NAME}"
     log_info "サービス状態確認完了: ${SERVICE_NAME}"
 
@@ -311,19 +316,20 @@ proc_service() {
 # 一覧表示・権限変更処理
 # ============================================================
 proc_misc() {
+    local out rc
     log_info "一覧表示・権限変更処理 開始"
 
     # ステップ1: 一覧表示
     log_cmd "ls -la /tmp"
-    out=$(ls -la /tmp)
-    check_rc $? 0 "E401" "一覧表示失敗: /tmp"
+    out=$(ls -la /tmp); rc=$?
+    check_rc "${rc}" 0 "E401" "一覧表示失敗: /tmp"
     check_str "${out}" "total" "must_contain" "E401" "一覧表示失敗（total が含まれない）: /tmp"
     log_info "一覧表示完了: /tmp"
 
     # ステップ2: ファイル権限変更
     log_cmd "chmod 755 ${TARGET_SH}"
-    chmod 755 "${TARGET_SH}"
-    check_rc $? 0 "E402" "ファイル権限変更失敗: ${TARGET_SH}"
+    chmod 755 "${TARGET_SH}"; rc=$?
+    check_rc "${rc}" 0 "E402" "ファイル権限変更失敗: ${TARGET_SH}"
     log_info "ファイル権限変更完了: ${TARGET_SH} -> 755"
 
     log_info "一覧表示・権限変更処理 完了"
