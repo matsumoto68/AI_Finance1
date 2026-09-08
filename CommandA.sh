@@ -184,6 +184,12 @@ proc_dir() {
     check_rc "${rc}" 0 "E105" "ディレクトリ削除失敗（空）: ${WORK_DIR_BK}"
     log_info "ディレクトリ削除（空）完了: ${WORK_DIR_BK}"
 
+    # ステップ8前処理: D-08試験用にWORK_DIR配下にファイルを作成（非空状態にする）
+    log_cmd "touch ${WORK_DIR}/dummy.txt"
+    touch "${WORK_DIR}/dummy.txt"; rc=$?
+    check_rc "${rc}" 0 "E101" "D-08前処理 ファイル作成失敗: ${WORK_DIR}/dummy.txt"
+    log_info "D-08前処理 ファイル作成完了: ${WORK_DIR}/dummy.txt"
+
     # ステップ8: ディレクトリ削除（非空・エラー確認）
     log_cmd "rmdir ${WORK_DIR} 2>&1"
     out=$(rmdir "${WORK_DIR}" 2>&1); rc=$?
