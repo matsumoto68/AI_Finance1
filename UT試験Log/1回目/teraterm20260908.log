@@ -1,0 +1,92 @@
+
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ pwd
+/home/ec2-user
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ ls
+CommandA.sh  deploy_CommandA.sh  deploy_test.sh  release-test-key.pem  test_data.sh
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ sudo bash /opt/release/scripts/deploy_test.sh
+sudo bash /opt/release/scripts/deploy_test.sh
+
+bash: /opt/release/scripts/deploy_test.sh: No such file or directory
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ wdls
+CommandA.sh  deploy_CommandA.sh  deploy_test.sh  release-test-key.pem  test_data.sh
+[ec2-user@ip-172-31-25-225 ~]$ pwd
+/home/ec2-user
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ pwd
+/home/ec2-user
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ cd /opt/
+[ec2-user@ip-172-31-25-225 opt]$ pls
+aws
+[ec2-user@ip-172-31-25-225 opt]$ 
+[ec2-user@ip-172-31-25-225 opt]$ release/scriptsrelease/scriptsscriptsscriptsrelease/scriptsscriptsrelease/scriptsscript
+[ec2-user@ip-172-31-25-225 opt]$ 
+[ec2-user@ip-172-31-25-225 opt]$ cd /var/lotmp/stesudo bashsudo baspdwwd
+/opt
+[ec2-user@ip-172-31-25-225 opt]$ 
+[ec2-user@ip-172-31-25-225 opt]$ 
+[ec2-user@ip-172-31-25-225 opt]$ cd ./home/ec2-user/
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ ls
+CommandA.sh  deploy_CommandA.sh  deploy_test.sh  release-test-key.pem  test_data.sh
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ sudo bashsudo bash deploy_test.shdeploy_test.sh
+deploy_test.sh: line 6: $'\r': command not found
+deploy_test.sh: line 7: set: -: invalid option
+set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]
+deploy_test.sh: line 8: $'\r': command not found
+deploy_test.sh: line 15: $'\r': command not found
+deploy_test.sh: line 19: syntax error near unexpected token `$'{\r''
+deploy_test.sh: line 19: `check_src() {'
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ sed -i 's/\r//' deploy_test.sh
+sed -i 's/\r//' deploy_test.sh
+
+[ec2-user@ip-172-31-25-225 ~]$ sed -i 's/\r//' CommandA.sh
+sed -i 's/\r//' CommandA.sh
+
+[ec2-user@ip-172-31-25-225 ~]$ sed -i 's/\r//' deploy_CommandA.sh
+sed -i 's/\r//' deploy_CommandA.sh
+
+[ec2-user@ip-172-31-25-225 ~]$ sed -i 's/\r//' test_data.sh
+sed -i 's/\r//' test_data.sh
+
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ # 改行コードが LF になったか確認（何も表示されなければOK）
+cat -A deploy_test.sh | head -5
+# 改行コードが LF になったか確認（何も表示されなければOK）
+cat -A deploy_test.sh | head -5
+
+#!/bin/bash$
+# ============================================================$
+# deploy_test.sh - M-hM-)M-&M-iM-(M-^SM-gM-^TM-(M-hM-3M-^GM-fM-^]M-^PM-iM-^EM-^MM-gM-=M-.M-cM-^BM-7M-cM-^BM-'M-cM-^CM-+M-oM-<M-^HM-eM-^MM-^XM-dM-=M-^SM-hM-)M-&M-iM-(M-^SM-cM-^CM-;M-gM-5M-^PM-eM-^PM-^HM-hM-)M-&M-iM-(M-^SM-eM-^EM-1M-iM-^@M-^ZM-oM-<M-^I$
+# CommandA.sh M-cM-^AM-^JM-cM-^BM-^HM-cM-^AM-3M-hM-)M-&M-iM-(M-^SM-cM-^CM-^GM-cM-^CM-<M-cM-^BM-?M-cM-^BM-^R LinuxM-gM-^RM-0M-eM-"M-^CM-cM-^AM-.M-fM-^IM-^@M-eM-.M-^ZM-cM-^CM-^GM-cM-^BM-#M-cM-^CM-,M-cM-^BM-/M-cM-^CM-^HM-cM-^CM-*M-cM-^AM-8M-iM-^EM-^MM-gM-=M-.M-cM-^AM-^YM-cM-^BM-^K$
+# ============================================================$
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ sudo bash deploy_test.sh
+sudo bash deploy_test.sh
+
+[INFO]  deploy_test.sh 処理開始
+[INFO]  配置先ディレクトリを作成しました: /opt/release/scripts
+[INFO]  配置完了: /opt/release/scripts/CommandA.sh (755)
+[INFO]  配置完了: /opt/release/scripts/deploy_CommandA.sh (755)
+[INFO]  試験データ配置完了: /tmp/testfile.sh
+[INFO]  全ファイルの配置確認完了
+[INFO]  deploy_test.sh 処理正常終了
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
+[ec2-user@ip-172-31-25-225 ~]$ 
