@@ -1,0 +1,58 @@
+========================================
+ スクリプト名: CommandA.sh
+ 実行開始日時: 2026-09-08 09:48:28
+========================================
+[2026-09-08 09:48:28] [CMD]   mkdir /tmp/testdir
+[2026-09-08 09:48:28] [RC]    ReturnCode=0
+[2026-09-08 09:48:28] [CMD]   mkdir /tmp/testdir 2>&1
+[2026-09-08 09:48:28] [RC]    ReturnCode=1
+[2026-09-08 09:48:28] [CMD]   mkdir /root/noperm 2>&1
+[2026-09-08 09:48:28] [RC]    ReturnCode=0
+[2026-09-08 09:48:28] [CMD]   cd /tmp/testdir
+[2026-09-08 09:48:28] [RC]    ReturnCode=0
+[2026-09-08 09:48:28] [CMD]   cd /tmp/notexist 2>&1
+[2026-09-08 09:48:28] [RC]    ReturnCode=1
+[2026-09-08 09:48:28] [CMD]   cp -r /tmp/testdir /tmp/testdir_bk
+[2026-09-08 09:48:28] [RC]    ReturnCode=0
+[2026-09-08 09:48:28] [CMD]   rmdir /tmp/testdir_bk
+[2026-09-08 09:48:28] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   touch /tmp/testdir/dummy.txt
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   rmdir /tmp/testdir 2>&1
+[2026-09-08 09:48:29] [RC]    ReturnCode=1
+[2026-09-08 09:48:29] [CMD]   rm -rf /tmp/testdir
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   touch /tmp/testdir/test.txt
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   echo hello > /tmp/testdir/data.txt
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   cat /tmp/testdir/data.txt
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   cp /tmp/testdir/data.txt /tmp/testdir/data_bk.txt
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   cp -f /tmp/testdir/data.txt /tmp/testdir/data_bk.txt
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   mv /tmp/testdir/test.txt /tmp/testdir/renamed.txt
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   rm /tmp/testdir/data_bk.txt
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   rm /tmp/testdir/notexist.txt 2>&1
+[2026-09-08 09:48:29] [RC]    ReturnCode=1
+[2026-09-08 09:48:29] [CMD]   rm -rf /tmp/testdir
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   systemctl start nginx
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   systemctl start nginx 2>&1
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   systemctl is-active nginx
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   systemctl stop nginx
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   systemctl is-active nginx
+[2026-09-08 09:48:29] [RC]    ReturnCode=3
+[2026-09-08 09:48:29] [CMD]   systemctl status nginx
+[2026-09-08 09:48:29] [RC]    ReturnCode=3
+[2026-09-08 09:48:29] [CMD]   ls -la /tmp
+[2026-09-08 09:48:29] [RC]    ReturnCode=0
+[2026-09-08 09:48:29] [CMD]   chmod 755 /tmp/testfile.sh
+[2026-09-08 09:48:29] [RC]    ReturnCode=0

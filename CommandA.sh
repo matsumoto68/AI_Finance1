@@ -266,6 +266,12 @@ proc_file() {
     check_str "${out}" "No such file or directory" "must_not_contain" "E206" "ファイル削除失敗（不存在）: /tmp/testdir/notexist.txt"
     log_info "ファイル削除（不存在）エラー確認完了"
 
+    # ステップ9: 作業ディレクトリ強制削除（ゴミファイル削除）
+    log_cmd "rm -rf ${WORK_DIR}"
+    rm -rf "${WORK_DIR}"; rc=$?
+    check_rc "${rc}" 0 "E207" "作業ディレクトリ強制削除失敗: ${WORK_DIR}"
+    log_info "作業ディレクトリ強制削除完了: ${WORK_DIR}"
+
     log_info "ファイル操作処理 完了"
 }
 
