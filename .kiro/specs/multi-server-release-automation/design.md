@@ -1,654 +1,449 @@
-# 内部設計書（Design Document）
+# Design Document
 
-## 複数サーバ対応リリース作業自動化 - シェルスクリプト拡張
-
----
-
-## 1. ドキュメント概要
-
-| 項目 | 内容 |
-|------|------|
-| プロジェクト名 | リリース作業自動化（複数サーバ対応拡張） |
-| ドキュメント種別 | 設計書（Design Document） |
-| 対象 | `release_all.sh`、`CommandB.sh`、`deploy_multi.sh` |
-| 参照資料 | requirements.md、外部設計書.md、内部設計書.md、ログ設計書.md、ディレクトリ定義書.md |
+# 複数サーバ対応リリース作業自動化 設計書
 
 ---
 
 ## Overview
 
-### 2.1 目的
-
-既存の単一サーバ向けリリース自動化スクリプト（`CommandA.sh`）を複数サーバ対応に拡張する。
-サーバA上で実行中の既存25コマンド自動化を継承しつつ、サーバA処理完了後にサーバBへSCPで資材を転送し、SSH経由でリモート実行する一連のオーケストレーション機能を新設する。
-
-### 2.2 拡張方針
-
-- `CommandA.sh` の実装・動作は一切変更しない（後方互換性の保持）
-- 新規3ファイルを追加して複数サーバ対応を実現する
-- 既存の共通関数仕様（`log_info`・`log_error`・`log_cmd`・`log_rc`・`check_rc`・`check_str`）を全スクリプトで統一する
-- SSH接続情報（`SSH_HOST`・`SSH_USER`・`SSH_KEY`）は実行引数から取得し、スクリプト内にハードコードしない
-
-### 2.3 新規追加ファイル一覧
-
-| ファイル名 | 種別 | 格納先 | 役割 |
-|-----------|------|--------|------|
-| `release_all.sh` | オーケストレーターシェル | `/opt/release/scripts/` | サーバA処理 → SCP転送 → SSHリモート実行を一括制御 |
-| `CommandB.sh` | サーバB向けメインシェル | サーバAの `/opt/release/scripts/`（SCP転送元） | サーバBでリモート実行されるコマンド群 |
-| `deploy_multi.sh` | 資材配置シェル | カレントディレクトリ | `CommandB.sh`・`release_all.sh` をサーバAの `/opt/release/scripts/` へ配置 |
-
----
+本書はリリース作業自動化プロジェクトの複数サーバ対応に関する設計を定義する。サーバA向け既存の自動化基盤（CommandA.sh）を継承しつつ、サーバBへのSCP/SSH連携による複数サーバ対応を実現する設計書である。
 
 ## Architecture
 
-### 3.1 システム全体像
-
-```
-担当者（Teraterm）
-  │
-  │ bash release_all.sh <SSH_HOST> <SSH_USER> <SSH_KEY>
-  ▼
-サーバA
-  ├─ release_all.sh（オーケストレーター）
-  │     │
-  │     ├─ [1] パラメータチェック
-  │     ├─ [2] SSH疎通確認（ssh -o ConnectTimeout=10）
-  │     ├─ [3] CommandA.sh（ローカル実行）
-  │     ├─ [4] SCP転送（CommandB.sh → サーバB）
-  │     └─ [5] SSH リモート実行（CommandB.sh on サーバB）
-  │
-  ├─ CommandA.sh（既存・変更なし）
-  │     └─ 25コマンドを実行（ログ: /var/log/release/）
-  │
-  └─ CommandB.sh（新規・SCP転送元）
-        └─ サーバBでリモート実行される
-
-サーバB
-  └─ /opt/release/scripts/CommandB.sh
-        └─ サーバB固有コマンド群を実行（ログ: /var/log/release/）
-```
-
-### 3.2 スクリプト間依存関係
-
-```
-deploy_multi.sh
-  ├─ CommandB.sh を /opt/release/scripts/ へ配置
-  └─ release_all.sh を /opt/release/scripts/ へ配置
-
-release_all.sh
-  ├─ 依存: CommandA.sh（サーバA上で実行）
-  ├─ 依存: CommandB.sh（SCPでサーバBへ転送）
-  └─ 依存: SSH/SCP（OpenSSH クライアント）
-```
-
----
+システム全体の構成・スコープ・スケジュール・体制・リスクを以下のセクションで定義する。
 
 ## Components and Interfaces
 
-### 4.1 release_all.sh（オーケストレーター）
-
-#### 4.1.1 全体構造
-
-```bash
-#!/bin/bash
-# ============================================================
-# release_all.sh - 複数サーバ対応オーケストレーターシェル
-# 使用方法: bash release_all.sh <SSH_HOST> <SSH_USER> <SSH_KEY>
-# ============================================================
-
-set -u
-
-# --- 定数定義 ---
-readonly LOG_DIR="/var/log/release"
-readonly TIMESTAMP=$(date +%Y%m%d%H%M%S)
-readonly LOG_FILE="${LOG_DIR}/release_all_${TIMESTAMP}.log"
-readonly DETAIL_LOG="${LOG_DIR}/release_all_detail_${TIMESTAMP}.log"
-readonly SCRIPT_DIR="/opt/release/scripts"
-readonly CMD_B_SH="${SCRIPT_DIR}/CommandB.sh"
-readonly CMD_B_REMOTE="/opt/release/scripts/CommandB.sh"
-
-# --- 引数（実行時に取得）---
-SSH_HOST="$1"
-SSH_USER="$2"
-SSH_KEY="$3"
-
-# --- 共通関数定義 ---
-log_info()   { ... }
-log_error()  { ... }
-log_cmd()    { ... }
-log_rc()     { ... }
-check_rc()   { ... }
-check_str()  { ... }
-
-# --- メイン処理 ---
-main() {
-    init_log                 # ログ初期化
-    check_params             # パラメータ検証
-    check_ssh_connection     # SSH疎通確認
-    run_server_a             # サーバA処理
-    scp_to_server_b          # SCP転送
-    run_server_b             # SSHリモート実行
-    log_info "全処理正常終了"
-    exit 0
-}
-
-main "$@"
-```
-
-#### 4.1.2 定数定義
-
-| 定数名 | 値 | 説明 |
-|--------|----|------|
-| `LOG_DIR` | `/var/log/release` | ログ出力ディレクトリ |
-| `TIMESTAMP` | `$(date +%Y%m%d%H%M%S)` | 実行開始日時（スクリプト起動時に1回取得） |
-| `LOG_FILE` | `/var/log/release/release_all_YYYYMMDDHHMMSS.log` | シェル実行ログ |
-| `DETAIL_LOG` | `/var/log/release/release_all_detail_YYYYMMDDHHMMSS.log` | 詳細ログ |
-| `SCRIPT_DIR` | `/opt/release/scripts` | スクリプト配置ディレクトリ |
-| `CMD_B_SH` | `${SCRIPT_DIR}/CommandB.sh` | SCP転送元ファイルパス（サーバA上） |
-| `CMD_B_REMOTE` | `/opt/release/scripts/CommandB.sh` | SCP転送先・SSH実行パス（サーバB上） |
-
-#### 4.1.3 実行時引数
-
-| 引数 | 変数名 | 説明 |
-|------|--------|------|
-| `$1` | `SSH_HOST` | サーバBのホスト名またはIPアドレス |
-| `$2` | `SSH_USER` | サーバBへのSSH接続ユーザー名 |
-| `$3` | `SSH_KEY` | 公開鍵認証用秘密鍵ファイルパス |
-
-#### 4.1.4 共通関数設計（CommandA.sh と同一仕様）
-
-| 関数名 | 役割 | 引数 | 出力先 |
-|--------|------|------|--------|
-| `log_info()` | INFOログ出力 | `$1`：メッセージ | `LOG_FILE` + 標準出力 |
-| `log_error()` | ERRORログ出力 | `$1`：エラーメッセージ | `LOG_FILE` + 標準エラー出力 |
-| `log_cmd()` | コマンドログ出力 | `$1`：実行コマンド文字列 | `DETAIL_LOG` |
-| `log_rc()` | ReturnCodeログ出力 | `$1`：ReturnCode値 | `DETAIL_LOG` |
-| `check_rc()` | ReturnCodeチェック | `$1`：実際のRC、`$2`：期待RC、`$3`：エラーコード、`$4`：エラーメッセージ | `LOG_FILE` / `DETAIL_LOG` |
-| `check_str()` | 出力文字列チェック | `$1`：出力、`$2`：キーワード、`$3`：モード、`$4`：エラーコード、`$5`：エラーメッセージ | `LOG_FILE` |
-
-#### 4.1.5 各処理関数の詳細設計
-
-##### init_log（ログ初期化）
-
-| ステップ | 処理内容 |
-|---------|---------|
-| 1 | `LOG_DIR` が存在しない場合、`mkdir -p` で作成 |
-| 2 | `LOG_FILE`・`DETAIL_LOG` にヘッダー（スクリプト名・実行開始日時）を出力 |
-| 3 | 実行対象サーバ（`SSH_HOST`）情報を `log_info()` でシェル実行ログに出力 |
-
-##### check_params（パラメータ検証）
-
-| ステップ | 処理内容 | エラー処理 |
-|---------|---------|-----------|
-| 1 | `SSH_HOST` が空文字でないことを確認 | 空の場合: `log_error()` でパラメータ名を出力し `exit 1` |
-| 2 | `SSH_USER` が空文字でないことを確認 | 空の場合: 同上 |
-| 3 | `SSH_KEY` が空文字でないことを確認 | 空の場合: 同上 |
-| 4 | `SSH_KEY` で指定された秘密鍵ファイルが存在することを確認 | 不存在の場合: 同上 |
-
-##### check_ssh_connection（SSH疎通確認）
-
-| ステップ | 処理内容 | 実行コマンド | エラー処理 |
-|---------|---------|------------|-----------|
-| 1 | サーバBへの疎通確認 | `ssh -o ConnectTimeout=10 -i ${SSH_KEY} ${SSH_USER}@${SSH_HOST} exit 2>&1` | RC≠0 → `log_error()` でホスト名付きエラー出力・`exit 1` |
-| 2 | 疎通確認成功時 | ― | `log_info()` で「サーバB接続確認完了」を出力 |
-
-##### run_server_a（サーバA処理）
-
-| ステップ | 処理内容 | 実行コマンド | エラー処理 |
-|---------|---------|------------|-----------|
-| 1 | 処理開始ログ出力 | ― | ― |
-| 2 | CommandA.sh をローカル実行 | `bash ${SCRIPT_DIR}/CommandA.sh` | RC≠0 → `log_error()` でエラーコード・詳細を出力・`exit 1` |
-| 3 | 処理完了ログ出力 | ― | ― |
-
-##### scp_to_server_b（SCP転送）
-
-| ステップ | 処理内容 | 実行コマンド | エラー処理 |
-|---------|---------|------------|-----------|
-| 1 | 転送開始ログ出力 | ― | ― |
-| 2 | コマンドをDETAIL_LOGへ記録 | `log_cmd "scp -i ${SSH_KEY} ${CMD_B_SH} ${SSH_USER}@${SSH_HOST}:${CMD_B_REMOTE}"` | ― |
-| 3 | SCPでCommandB.shを転送 | `scp -i ${SSH_KEY} ${CMD_B_SH} ${SSH_USER}@${SSH_HOST}:${CMD_B_REMOTE} 2>&1` | RC≠0 → `log_error()` で転送元・転送先を含むエラー出力・`exit 1` |
-| 4 | ReturnCodeをDETAIL_LOGへ記録 | `log_rc "${rc}"` | ― |
-| 5 | 転送完了ログ出力 | `log_info()` | ― |
-
-##### run_server_b（SSHリモート実行）
-
-| ステップ | 処理内容 | 実行コマンド | エラー処理 |
-|---------|---------|------------|-----------|
-| 1 | リモート実行開始ログ出力 | ― | ― |
-| 2 | コマンドをDETAIL_LOGへ記録 | `log_cmd "ssh -i ${SSH_KEY} ${SSH_USER}@${SSH_HOST} bash ${CMD_B_REMOTE}"` | ― |
-| 3 | SSH経由でCommandB.shをリモート実行 | `ssh -i ${SSH_KEY} ${SSH_USER}@${SSH_HOST} bash ${CMD_B_REMOTE} 2>&1` | RC≠0 → `log_error()` でエラーコード・実行コマンド・RC値を出力・`exit 1` |
-| 4 | ReturnCodeをDETAIL_LOGへ記録 | `log_rc "${rc}"` | ― |
-| 5 | リモート実行完了ログ出力 | `log_info()` | ― |
-
----
-
-### 4.2 CommandB.sh（サーバB向けメインシェル）
-
-#### 4.2.1 全体構造
-
-```bash
-#!/bin/bash
-# ============================================================
-# CommandB.sh - サーバB向けリリース作業自動化シェルスクリプト
-# SSH経由でリモート実行される
-# ============================================================
-
-set -u
-
-# --- 定数定義 ---
-readonly LOG_DIR="/var/log/release"
-readonly TIMESTAMP=$(date +%Y%m%d%H%M%S)
-readonly LOG_FILE="${LOG_DIR}/CommandB_${TIMESTAMP}.log"
-readonly DETAIL_LOG="${LOG_DIR}/CommandB_detail_${TIMESTAMP}.log"
-readonly WORK_DIR_B="/tmp/testdir_b"
-readonly DATA_FILE_B="${WORK_DIR_B}/data_b.txt"
-readonly SERVICE_NAME_B="httpd"    # サーバB固有のサービス名（例）
-
-# --- 共通関数定義（CommandA.sh と同一仕様） ---
-log_info()   { ... }
-log_error()  { ... }
-log_cmd()    { ... }
-log_rc()     { ... }
-check_rc()   { ... }
-check_str()  { ... }
-
-# --- メイン処理 ---
-main() {
-    init_log
-    log_info "CommandB.sh 処理開始"
-    check_env_b
-    proc_dir_b
-    proc_file_b
-    proc_service_b
-    log_info "CommandB.sh 処理正常終了"
-    exit 0
-}
-
-main
-```
-
-#### 4.2.2 定数定義
-
-| 定数名 | 値 | 説明 |
-|--------|----|------|
-| `LOG_DIR` | `/var/log/release` | ログ出力ディレクトリ（サーバBのローカルパス） |
-| `TIMESTAMP` | `$(date +%Y%m%d%H%M%S)` | 実行開始日時 |
-| `LOG_FILE` | `/var/log/release/CommandB_YYYYMMDDHHMMSS.log` | シェル実行ログ |
-| `DETAIL_LOG` | `/var/log/release/CommandB_detail_YYYYMMDDHHMMSS.log` | 詳細ログ |
-| `WORK_DIR_B` | `/tmp/testdir_b` | サーバB上の作業ディレクトリ |
-| `DATA_FILE_B` | `/tmp/testdir_b/data_b.txt` | サーバB用データファイル |
-| `SERVICE_NAME_B` | `httpd`（例） | サーバB固有の操作対象サービス名 |
-
-#### 4.2.3 各処理関数の概要
-
-| 関数名 | 処理内容 |
-|--------|---------|
-| `init_log()` | ログディレクトリ作成・ログヘッダー出力（`CommandA.sh` と同一仕様） |
-| `check_env_b()` | `LOG_DIR` 書き込み権限確認・`systemctl` コマンド存在確認 |
-| `proc_dir_b()` | サーバB上でのディレクトリ作成・削除操作 |
-| `proc_file_b()` | サーバB上でのファイル作成・確認・削除操作 |
-| `proc_service_b()` | サーバB固有のサービス起動・停止・状態確認 |
-
-> **注意：** `CommandB.sh` の具体的なコマンド内容はサーバB固有の手順書に基づき決定する。
-> 本設計書では共通関数仕様・ログ仕様・エラーハンドリングパターンのみ規定し、個別コマンドは別途手順書で管理する。
-
----
-
-### 4.3 deploy_multi.sh（複数サーバ向け資材配置シェル）
-
-#### 4.3.1 全体構造
-
-```bash
-#!/bin/bash
-# ============================================================
-# deploy_multi.sh - 複数サーバ対応資材配置シェル
-# CommandB.sh と release_all.sh を /opt/release/scripts/ へ配置
-# ============================================================
-
-set -u
-
-# --- 定数定義 ---
-SCRIPT_DIR="/opt/release/scripts"
-SRC_CMD_B="./CommandB.sh"
-SRC_RELEASE_ALL="./release_all.sh"
-
-# --- メイン処理 ---
-main() {
-    check_src_files    # 配置元ファイル存在確認
-    make_dir           # 配置先ディレクトリ作成
-    copy_files         # ファイルコピー
-    set_permissions    # 実行権限付与
-    echo "全資材の配置完了: ${SCRIPT_DIR}"
-    exit 0
-}
-
-main
-```
-
-#### 4.3.2 定数定義
-
-| 定数名 | 値 | 説明 |
-|--------|----|------|
-| `SCRIPT_DIR` | `/opt/release/scripts` | 配置先ディレクトリ |
-| `SRC_CMD_B` | `./CommandB.sh` | 配置元 CommandB.sh（カレントディレクトリ） |
-| `SRC_RELEASE_ALL` | `./release_all.sh` | 配置元 release_all.sh（カレントディレクトリ） |
-
-#### 4.3.3 各処理詳細
-
-| 関数名 | 処理内容 | 実行コマンド | エラー処理 |
-|--------|---------|------------|-----------|
-| `check_src_files` | `CommandB.sh` の存在確認 | `[ -f ${SRC_CMD_B} ]` | 不存在の場合: エラーメッセージ出力・`exit 1` |
-| | `release_all.sh` の存在確認 | `[ -f ${SRC_RELEASE_ALL} ]` | 同上 |
-| `make_dir` | 配置先ディレクトリ作成 | `[ -d ${SCRIPT_DIR} ] \|\| mkdir -p ${SCRIPT_DIR}` | `mkdir` 失敗の場合: エラーメッセージ出力・`exit 1` |
-| `copy_files` | CommandB.sh コピー | `cp ${SRC_CMD_B} ${SCRIPT_DIR}/CommandB.sh` | RC≠0の場合: エラーメッセージ出力・`exit 1` |
-| | release_all.sh コピー | `cp ${SRC_RELEASE_ALL} ${SCRIPT_DIR}/release_all.sh` | 同上 |
-| `set_permissions` | CommandB.sh に実行権限付与 | `chmod 755 ${SCRIPT_DIR}/CommandB.sh` | RC≠0の場合: エラーメッセージ出力・`exit 1` |
-| | release_all.sh に実行権限付与 | `chmod 755 ${SCRIPT_DIR}/release_all.sh` | 同上 |
-
----
+各シェルスクリプトのファイル構成・役割・実行フローを「7. 複数サーバ対応の技術構成」に記載する。
 
 ## Data Models
 
-### 5.1 ディレクトリ構成（拡張後）
+ディレクトリ構成・ログ命名規則・ファイル権限を「7. 複数サーバ対応の技術構成」に記載する。
 
-#### サーバA（`/opt/release/scripts/`）
+## Error Handling
+
+SSH/SCP失敗時のエラーハンドリングおよびリスク対策を「6. リスク管理」に記載する。
+
+---
+
+## 1. プロジェクト概要
+
+### 1.1 背景
+
+現状、サーバAに対して手動Linuxコマンドを含む作業手順書をシェルスクリプト化した「CommandA.sh」による単一サーバ向けのリリース作業自動化が実現している。しかし、リリース対象がサーバBに拡張された場合、以下の課題が生じている。
+
+- サーバB向けのシェルスクリプトが存在せず、手動作業が継続している
+- サーバAからサーバBへの資材転送（SCP）・リモート実行（SSH）が手動であり、作業工数と人為的ミスのリスクがある
+- 複数サーバにまたがる結合試験の証跡取得・整理に工数がかかる
+
+### 1.2 目的
+
+本プロジェクトでは、サーバBへの自動化拡張およびAIコーディングアシスタント「Kiro」の継続導入により、以下3点を実現する。
+
+| # | 目的 | 内容 |
+|---|------|------|
+| ① | 複数サーバ対応の自動化 | CommandB.shの新規作成とSCP/SSH経由の自動転送・リモート実行により、サーバAとサーバBの両方をカバー |
+| ② | 作業の手間削減 | オーケストレーターシェルにより、複数サーバへの処理を一括実行・制御 |
+| ③ | 人為的ミスの防止 | Kiroによるコードレビュー・品質チェックを継続適用 |
+
+### 1.3 対象工程
+
+本プロジェクトが対象とする工程は以下の5工程である。
+
+```
+要件定義 → 設計 → 製造 → 単体試験 → 結合試験
+```
+
+### 1.4 システム構成
+
+サーバA・サーバB・担当者・開発チームの関係を以下に示す。
+
+```
+担当者
+  │
+  │ 手動コマンド手順書を展開（サーバA・サーバB各向け）
+  ▼
+開発チーム
+  │
+  │ Kiroを使用してCommandA.sh / CommandB.sh / Orchestrator_Shellを生成・レビュー
+  ▼
+Orchestrator_Shell（サーバA上で実行）
+  │
+  ├─── [直接実行] ──────────────────────────────▶ サーバA
+  │                                                  CommandA.sh を実行
+  │                                                  ログ出力（/var/log/release/）
+  │
+  └─── [SCP転送] ──────────────────────────────▶ サーバB
+              │                                     CommandB.sh を配置
+              └─ [SSH リモート実行] ──────────────▶ CommandB.sh を実行
+                                                     ログ出力（/var/log/release/）
+```
+
+---
+
+## 2. スコープ（作業範囲・成果物）
+
+### 2.1 作業範囲
+
+| 工程 | 対象範囲 | Kiro活用 |
+|------|----------|---------|
+| 要件定義 | 複数サーバ対応の要件整理・要件定義書作成 | ★ 要件を構造化管理、ドラフト生成 |
+| 設計 | 複数サーバ向け外部設計書・内部設計書・ディレクトリ定義書の作成 | ★ 設計書ドラフト自動生成、人がレビュー・修正 |
+| 製造 | CommandA.sh確認・CommandB.sh新規作成・Orchestrator_Shell作成 | ★ 手動コマンドからシェルを自動生成、人が確認・調整 |
+| 単体試験 | サーバA向け項目表作成・シェル実行・証跡取得 | ★ 項目表ドラフト・資材配置シェルを自動生成 |
+| 結合試験 | 複数サーバ向け項目表作成・Orchestrator_Shell実行・証跡取得 | ★ 項目表ドラフト・資材配置シェル・試験データを自動生成 |
+
+### 2.2 成果物一覧
+
+| 工程 | 成果物 | 区分 | 作成方法 |
+|------|--------|------|----------|
+| 要件定義 | 要件定義書 | 既存拡張 | Kiroがドラフト生成 → 人がレビュー |
+| 要件定義 | 自動化対象コマンド一覧（サーバA） | 既存 | 手動コマンド手順書より抽出・整理 |
+| 設計 | 外部設計書（複数サーバ対応版） | 既存拡張 | Kiroがドラフト生成 → 人がレビュー・修正 |
+| 設計 | 内部設計書（複数サーバ対応版） | 既存拡張 | Kiroがドラフト生成 → 人がレビュー・修正 |
+| 設計 | ディレクトリ定義書（複数サーバ対応版） | 既存拡張 | 製造完了後にKiroがコードから自動生成 |
+| 設計 | ログ設計書 | 既存 | Kiroがドラフト生成 → 人がレビュー・修正（共通テンプレート） |
+| 設計 | エラーコード定義書 | 既存 | Kiroがドラフト生成 → 人がレビュー・修正（共通テンプレート） |
+| 製造 | CommandA.sh | 既存 | 動作確認済み（修正必要時はKiro支援） |
+| 製造 | CommandB.sh | 新規 | Kiroが自動生成 → 人が確認・調整 |
+| 製造 | Orchestrator_Shell（release_all.sh） | 新規 | Kiroが自動生成 → 人が確認・調整 |
+| 単体試験 | 項目表（サーバA向け） | 既存拡張 | Kiroが設計書ベースでドラフト生成 → 人が確認 |
+| 単体試験 | 資材配置シェル（複数サーバ向け） | 新規 | Kiroが自動生成 → 人が確認 |
+| 結合試験 | 項目表（複数サーバ結合向け） | 新規 | Kiroが設計書ベースでドラフト生成 → 人が確認 |
+| 結合試験 | 資材配置シェル（複数サーバ向け） | 新規 | Kiroが自動生成 → 人が確認 |
+| 結合試験 | 試験データ | 新規 | Kiroが自動生成 → 人が確認 |
+
+### 2.3 証跡一覧
+
+証跡取得はKiroによる自動整理・記録を活用する。実際のログ出力はLinux環境での実行に依存するが、**Kiroによる証跡の整理・取りまとめを実施対象**とする。
+
+| 試験工程 | 対象サーバ | 証跡 | 取得方法 |
+|----------|-----------|------|----------|
+| 単体試験 | サーバA | Teratermログ（コマンド実行ログ） | 実行後にKiroで整理・記録 |
+| 単体試験 | サーバA | シェル実行ログ（メッセージ出力） | 実行後にKiroで整理・記録 |
+| 単体試験 | サーバA | 詳細ログ（コマンド実行結果） | 実行後にKiroで整理・記録 |
+| 結合試験 | サーバA | Orchestrator_Shell実行ログ | 実行後にKiroで整理・記録 |
+| 結合試験 | サーバA | SCP転送ログ | 実行後にKiroで整理・記録 |
+| 結合試験 | サーバB | CommandB.shシェル実行ログ | 実行後にKiroで整理・記録 |
+| 結合試験 | サーバB | ファイル/ディレクトリ作成・削除結果 | 実行後にKiroで整理・記録 |
+
+### 2.4 スコープ外
+
+- 外部シェル連携結果の取得・確認
+- Linux環境のサーバ構築・インフラ管理
+- サーバAおよびサーバBのOS・ネットワーク設定
+- SSH接続のための公開鍵配布・証明書管理（事前設定済みを前提とする）
+
+### 2.5 自動化対象コマンド一覧（サーバA向け全25コマンド）
+
+`test_data_CommandA.xlsx`（手動コマンド手順書）に記載された全コマンドをサーバA向け自動化の対象とする。
+
+| 項番 | コマンドの内容 | Linuxコマンド |
+|------|--------------|--------------|
+| 1 | ディレクトリ作成 | `mkdir /tmp/testdir` |
+| 2 | ディレクトリ作成（既存） | `mkdir /tmp/testdir` |
+| 3 | ディレクトリ作成（権限なし） | `mkdir /root/noperm` |
+| 4 | ファイル作成（touch） | `touch /tmp/testdir/test.txt` |
+| 5 | ファイル作成（echo） | `echo hello > /tmp/testdir/data.txt` |
+| 6 | ファイル内容確認 | `cat /tmp/testdir/data.txt` |
+| 7 | ディレクトリ移動 | `cd /tmp/testdir` |
+| 8 | ディレクトリ移動（存在しない） | `cd /tmp/notexist` |
+| 9 | ファイルコピー | `cp /tmp/testdir/data.txt /tmp/testdir/data_bk.txt` |
+| 10 | ファイルコピー（上書き） | `cp -f /tmp/testdir/data.txt /tmp/testdir/data_bk.txt` |
+| 11 | ディレクトリコピー | `cp -r /tmp/testdir /tmp/testdir_bk` |
+| 12 | ファイル移動（リネーム） | `mv /tmp/testdir/test.txt /tmp/testdir/renamed.txt` |
+| 13 | ファイル削除 | `rm /tmp/testdir/data_bk.txt` |
+| 14 | ファイル削除（存在しない） | `rm /tmp/testdir/notexist.txt` |
+| 15 | ディレクトリ削除（空） | `rmdir /tmp/testdir_bk` |
+| 16 | ディレクトリ削除（非空） | `rmdir /tmp/testdir` |
+| 17 | ディレクトリ強制削除 | `rm -rf /tmp/testdir` |
+| 18 | サービス起動 | `systemctl start nginx` |
+| 19 | サービス起動（失敗） | `systemctl start nginx` |
+| 20 | 起動確認 | `systemctl is-active nginx` |
+| 21 | サービス停止 | `systemctl stop nginx` |
+| 22 | 停止確認 | `systemctl is-active nginx` |
+| 23 | サービス状態確認 | `systemctl status nginx` |
+| 24 | 一覧表示（ls） | `ls -la /tmp` |
+| 25 | ファイル権限変更 | `chmod 755 /tmp/testfile.sh` |
+
+> 出典：`test_data_CommandA.xlsx`（手動コマンド手順書）
+
+### 2.6 サーバB向けコマンド構成
+
+CommandB.shはCommandA.shと同等の処理構造（カテゴリ1〜4）を持つ。担当者から展開されるサーバB向けコマンド手順書に基づき、以下の処理カテゴリを実装する。
+
+| カテゴリ | 処理内容 | CommandA.shとの関係 |
+|----------|---------|---------------------|
+| カテゴリ1 | ディレクトリ操作処理 | 同等構造（作業ディレクトリのパスはサーバB環境に合わせて設定） |
+| カテゴリ2 | ファイル操作処理 | 同等構造 |
+| カテゴリ3 | サービス操作処理 | 同等構造（対象サービスはサーバB環境に合わせて設定） |
+| カテゴリ4 | 一覧表示・権限変更処理 | 同等構造 |
+
+---
+
+## 3. スケジュール（マイルストーン）
+
+### 3.1 工程間の依存関係
+
+```
+要件定義完了
+    ↓（要件定義書の承認）
+設計完了
+    ↓（複数サーバ向け設計書のレビュー・承認）
+製造完了
+    ↓（CommandA.sh確認・CommandB.sh・Orchestrator_Shell動作確認）
+単体試験完了（サーバA向けCommandA.sh）
+    ↓（項目表の合否確認・証跡取得）
+複数サーバ結合試験完了
+    ↓（Orchestrator_Shell経由でサーバA・B連携確認・証跡取得）
+リリース
+```
+
+### 3.2 マイルストーン一覧
+
+| マイルストーン | 完了条件 | 備考 |
+|--------------|----------|------|
+| M1：要件定義完了 | 要件定義書のレビュー・承認完了 | Kiroドラフト生成後、担当者・開発チームで確認 |
+| M2：設計完了 | 複数サーバ向け外部設計書・内部設計書・ログ設計書・エラーコード定義書のレビュー・承認完了（ディレクトリ定義書はM3製造完了後に生成） | Kiroドラフト生成後、開発チームで修正・確認 |
+| M3：製造完了 | CommandA.sh動作確認・CommandB.sh・Orchestrator_Shellのコードレビュー・動作確認完了 | Kiroによるベストプラクティス・セキュリティチェック実施済み |
+| M4：単体試験完了 | サーバA向け項目表の全項目合否確認・証跡取得完了 | 証跡：Teratermログ・シェル実行ログ・詳細ログ |
+| M5：結合試験完了 | 複数サーバ結合試験の全項目確認・証跡取得完了 | 証跡：Orchestrator_Shellログ・SCP転送ログ・CommandB.sh実行ログ |
+
+### 3.3 スケジュール見積もり根拠
+
+Kiro導入により、各工程の準備作業（ドキュメント作成・シェル生成）が短縮される。スケジュール見積もりには以下の削減率を前提とする。
+
+| 工程 | 削減率 |
+|------|--------|
+| 要件定義 | 20〜30% |
+| 設計 | 40〜50% |
+| 製造 | 50〜60% |
+| 単体試験準備 | 30〜40% |
+| 結合試験準備 | 30〜40% |
+| 証跡取得 | 30〜40% |
+
+---
+
+## 4. コスト・予算
+
+### 4.1 工数見積もり比較
+
+| 工程 | 導入前 | 導入後 | 削減率 | 削減効果 |
+|------|--------|--------|--------|----------|
+| 要件定義 | 手動作成 | Kiro支援 + 人レビュー | 20〜30% | 複数サーバ対応ドラフト生成で整理工数削減 |
+| 設計 | 手動作成 | Kiro生成 + 人レビュー・修正 | 40〜50% | 複数サーバ対応設計書を一括ドラフト化 |
+| 製造 | 手動変換 | Kiro自動生成 + 人確認 | 50〜60% | CommandB.sh・Orchestrator_Shell生成を自動化 |
+| 単体試験準備 | 手動作成 | Kiro生成 + 人確認 | 30〜40% | 項目表・資材配置シェルを自動生成 |
+| 結合試験準備 | 手動作成 | Kiro生成 + 人確認 | 30〜40% | 複数サーバ向け項目表・資材配置シェルを自動生成 |
+| 証跡取得 | 手動 | Kiroで整理・記録 | 30〜40% | 複数サーバのログ整理・取りまとめをKiroが支援 |
+
+### 4.2 コスト構成要素
+
+- 開発チームの作業工数（削減後）
+- Kiroツールの利用コスト
+- レビュー・確認工数（人によるレビューは全工程で必須）
+
+### 4.3 超過コスト対処方針
+
+Kiro導入による工数削減効果が当初見積もりを下回った場合、以下を対処方針とする。
+
+1. 削減効果が低い工程を特定し、Kiroの活用方法を見直す
+2. 超過分をリスクバッファから充当する
+3. スコープの優先順位を見直し、後続工程への影響を最小化する
+
+---
+
+## 5. 体制
+
+### 5.1 役割定義
+
+| 役割 | 担当者 | 責任範囲 |
+|------|--------|----------|
+| 担当者（PIC） | 業務担当者 | 手動コマンド手順の提供（サーバA・B両向け）・要件定義への参加・成果物の最終承認 |
+| 開発チーム | 技術担当者 | シェルスクリプトの設計・製造・試験・Kiro生成物のレビュー・確認 |
+| Kiro | AIコーディングアシスタント | 各工程のドラフト生成・シェル自動生成・試験データ生成・証跡整理・コードレビュー支援（補助ツール） |
+
+### 5.2 工程ごとの役割分担
+
+| 工程 | 担当者 | 開発チーム | Kiro |
+|------|--------|------------|------|
+| 要件定義 | 手動コマンド手順の展開・レビュー参加 | 要件整理・Kiroドラフトのレビュー・確定 | 要件定義書ドラフト生成 |
+| 設計 | レビュー参加（必要に応じて） | 複数サーバ設計内容の決定・Kiroドラフトのレビュー・修正・確定 | 複数サーバ対応設計書ドラフト生成 |
+| 製造 | 確認・承認 | CommandA.sh確認・CommandB.sh・Orchestrator_Shellの動作確認・調整・確定 | CommandB.sh・Orchestrator_Shell自動生成・コードレビュー |
+| 単体試験 | 確認・承認 | 項目表確認・CommandA.sh実行・合否判定 | 項目表・資材配置シェルドラフト生成・証跡整理 |
+| 結合試験 | 確認・承認 | 項目表確認・Orchestrator_Shell実行・合否判定 | 複数サーバ向け項目表・資材配置シェル・試験データドラフト生成・証跡整理 |
+
+### 5.3 Kiro生成物のレビュールール
+
+- Kiroが生成したすべての成果物は、開発チームが必ずレビュー・確認を行う
+- 最終的な成果物の品質責任は開発チームが持つ
+- Kiroの出力を無条件に採用しない
+
+---
+
+## 6. リスク管理
+
+### 6.1 リスク一覧
+
+| # | リスク | 発生確率 | 影響度 | 対策 |
+|---|--------|----------|--------|------|
+| R1 | AIが生成した成果物の品質が要求水準を満たさないリスク | 中 | 高 | 全成果物に人によるレビューを必須化。レビューチェックリストを用意する |
+| R2 | Kiroへの過度な依存により人のスキルが低下するリスク | 低 | 中 | Kiroはあくまで補助ツールとして位置づけ、人による判断・確認を工程として明示する |
+| R3 | 機密情報をKiroに入力することによる情報漏洩リスク | 中 | 高 | 機密性の高い情報（本番環境のIP・パスワード・SSH秘密鍵等）はKiroへの入力を禁止し、ダミーデータを使用する |
+| R4 | Kiroが生成したシェルスクリプトに誤りが含まれるリスク | 中 | 高 | コードレビュープロセスを必須化。単体試験での動作確認を徹底する |
+| R5 | 証跡整理の品質リスク（Kiro整理結果が不完全な場合） | 低 | 中 | Kiroが整理した証跡を人が必ず確認・補完する |
+| R6 | スケジュール遅延リスク（Kiro削減効果が未達の場合） | 低 | 中 | 工数削減効果を定期的にモニタリングし、早期に遅延を検知して対策を実施する |
+| R7 | SSH/SCP接続失敗リスク（サーバA→サーバB間の接続エラー） | 中 | 高 | 事前に接続確認を実施する。接続失敗時はOrchestratorShellがエラーログを出力し処理を中断する |
+| R8 | サーバB上でのリモート実行失敗リスク | 中 | 高 | CommandB.shの単体試験をサーバB上で事前実施する。リモート実行失敗時はエラーログを取得して原因を特定する |
+
+### 6.2 リスク対策の詳細
+
+**R1・R4（Kiro生成物の品質リスク）**
+- Kiroが生成したドラフト・シェルスクリプトに対して、開発チームが必ずレビューを実施する
+- レビュー後に問題が発見された場合、修正してから次工程へ進む
+
+**R3（情報漏洩リスク）**
+- 機密情報（本番環境の認証情報・IPアドレス・SSH秘密鍵等）はKiroに入力しない
+- Kiroには汎化した形（例：`<SERVER_B_HOST>`等のプレースホルダー）で入力し、実際の値は開発チームが手動で差し替える
+
+**R5（証跡整理の品質リスク）**
+- Kiroが整理・取りまとめた証跡は、開発チームが内容を確認して確定する
+
+**R7（SSH/SCP接続失敗リスク）**
+- 結合試験前にサーバA→サーバB間のSSH接続確認を実施する
+- Orchestrator_ShellのSCP/SSH処理にはエラーハンドリングを実装し、失敗時はServer_A上にエラーログを記録して処理を中断する
+
+**R8（リモート実行失敗リスク）**
+- CommandB.shの単体試験はサーバB上で直接実施し、動作確認完了後に結合試験へ進む
+- SSH経由のリモート実行失敗時はServer_B上のログをServer_AへSCPで回収する手順を定義する
+
+### 6.3 リスク更新プロセス
+
+- 工程の節目（マイルストーン完了時）にリスク一覧を見直す
+- 新たなリスクが識別された場合、リスク一覧に追記し、開発チーム全体で共有する
+
+---
+
+## 7. 複数サーバ対応の技術構成
+
+### 7.1 ファイル構成
+
+| ファイル名 | 種別 | 配置場所 | 説明 |
+|-----------|------|---------|------|
+| `CommandA.sh` | メインシェル（既存） | サーバA | サーバA向け全25コマンドを実行するメインスクリプト |
+| `CommandB.sh` | メインシェル（新規） | サーバB | サーバB向けコマンドを実行するメインスクリプト |
+| `release_all.sh` | オーケストレーターシェル（新規） | サーバA | サーバA実行＋サーバBへのSCP転送・SSH実行を一括制御 |
+| `deploy_multi.sh` | 資材配置シェル（新規） | サーバA（実行元） | サーバA・B両方へ資材を配置する複数サーバ向け配置シェル |
+| `deploy_CommandA.sh` | 資材配置シェル（既存） | サーバA | サーバA向け既存資材配置シェル |
+
+### 7.2 実行フロー
+
+```
+開発チーム（サーバA上で操作）
+  │
+  ├─ [1] deploy_multi.sh 実行
+  │       ├─ CommandA.sh を サーバA /opt/release/scripts/ へ配置
+  │       └─ CommandB.sh を サーバA /opt/release/scripts/ へ配置
+  │           （後工程でSCPによりサーバBへ転送）
+  │
+  └─ [2] release_all.sh 実行
+          │
+          ├─ [2-1] CommandA.sh をサーバA上でローカル実行
+          │         └─ ログ出力: /var/log/release/CommandA_*.log（サーバA）
+          │
+          ├─ [2-2] SCP: CommandB.sh をサーバA → サーバB /opt/release/scripts/ へ転送
+          │
+          └─ [2-3] SSH: サーバBのCommandB.shをリモート実行
+                    └─ ログ出力: /var/log/release/CommandB_*.log（サーバB）
+```
+
+### 7.3 ログファイル命名規則
+
+| 対象 | 種別 | 命名規則 | 例 |
+|------|------|---------|---|
+| サーバA | シェル実行ログ | `CommandA_YYYYMMDDHHMMSS.log` | `CommandA_20260908143052.log` |
+| サーバA | 詳細ログ | `CommandA_detail_YYYYMMDDHHMMSS.log` | `CommandA_detail_20260908143052.log` |
+| サーバB | シェル実行ログ | `CommandB_YYYYMMDDHHMMSS.log` | `CommandB_20260908143055.log` |
+| サーバB | 詳細ログ | `CommandB_detail_YYYYMMDDHHMMSS.log` | `CommandB_detail_20260908143055.log` |
+| サーバA | オーケストレーターログ | `release_all_YYYYMMDDHHMMSS.log` | `release_all_20260908143050.log` |
+
+### 7.4 ディレクトリ構成
+
+**サーバA（既存＋新規）**
 
 ```
 /
 ├── opt/
 │   └── release/
 │       └── scripts/
-│           ├── CommandA.sh           # 既存（変更なし）
-│           ├── CommandB.sh           # 新規追加（SCP転送元）
-│           └── release_all.sh        # 新規追加（オーケストレーター）
+│           ├── CommandA.sh           # 既存
+│           ├── CommandB.sh           # 新規（SCP転送前の資材）
+│           ├── release_all.sh        # 新規（オーケストレーター）
+│           └── deploy_multi.sh       # 新規（複数サーバ向け資材配置）
 └── var/
     └── log/
         └── release/
             ├── CommandA_YYYYMMDDHHMMSS.log
             ├── CommandA_detail_YYYYMMDDHHMMSS.log
-            ├── release_all_YYYYMMDDHHMMSS.log         # 新規
-            └── release_all_detail_YYYYMMDDHHMMSS.log  # 新規
+            └── release_all_YYYYMMDDHHMMSS.log
 ```
 
-#### サーバB（`/opt/release/scripts/`）
+**サーバB（新規）**
 
 ```
 /
 ├── opt/
 │   └── release/
 │       └── scripts/
-│           └── CommandB.sh           # SCPで転送されたファイル
+│           └── CommandB.sh           # SCPで転送される
 └── var/
     └── log/
         └── release/
-            ├── CommandB_YYYYMMDDHHMMSS.log             # CommandB.sh実行時に生成
-            └── CommandB_detail_YYYYMMDDHHMMSS.log      # CommandB.sh実行時に生成
+            ├── CommandB_YYYYMMDDHHMMSS.log
+            └── CommandB_detail_YYYYMMDDHHMMSS.log
 ```
-
-### 5.2 ログファイル命名規則（拡張後）
-
-> ログ設計書.md「3. ログファイル命名規則」に準拠。
-
-| シェル名 | シェル実行ログ | 詳細ログ |
-|---------|--------------|---------|
-| `CommandA.sh` | `CommandA_YYYYMMDDHHMMSS.log` | `CommandA_detail_YYYYMMDDHHMMSS.log` |
-| `release_all.sh` | `release_all_YYYYMMDDHHMMSS.log` | `release_all_detail_YYYYMMDDHHMMSS.log` |
-| `CommandB.sh` | `CommandB_YYYYMMDDHHMMSS.log` | `CommandB_detail_YYYYMMDDHHMMSS.log` |
-
-### 5.3 ファイル権限定義
-
-| 対象ファイル/ディレクトリ | 権限値 | 備考 |
-|------------------------|--------|------|
-| `release_all.sh` | `755` | `deploy_multi.sh` が付与 |
-| `CommandB.sh` | `755` | `deploy_multi.sh` が付与 |
-| `deploy_multi.sh` | `755` | 手動で付与 |
-| `/var/log/release/` | `755` | `init_log` 実行時に自動作成 |
-| ログファイル（`*.log`） | `644` | `tee` / リダイレクトで生成される標準権限 |
 
 ---
 
 ## Correctness Properties
 
-*プロパティとは、システムのすべての有効な実行において成立すべき特性または動作のことです。プロパティは人間が読める仕様と機械で検証可能な正確性保証の橋渡しをします。*
+複数サーバ対応リリース自動化システムが満たすべき正確性の特性を以下に定義する。
 
----
+### Property 1: SSH/SCP失敗時の処理中断保証
 
-### Property 1: ログ出力フォーマット準拠
+SSH/SCP接続失敗時は必ずエラーログを出力し `exit 1` で終了すること。後続処理（サーバBへの資材転送・リモート実行）を実行しないこと。
 
-*任意の* 文字列メッセージに対して `log_info()`・`log_error()`・`log_cmd()`・`log_rc()` を呼び出したとき、出力される各行は必ず `[YYYY-MM-DD HH:MM:SS] [LEVEL] メッセージ` のフォーマットに適合しなければならない。
+**Validates: Requirements 6.4**
 
-**Validates: Requirements 5.2, 5.4, 8.2**
+### Property 2: サーバA失敗時のサーバB処理停止保証
 
----
+サーバAの処理（CommandA.sh）が失敗した場合、サーバBへの資材転送およびリモート実行を一切行わないこと。
 
-### Property 2: 必須パラメータ未設定時の拒否
+**Validates: Requirements 6.2**
 
-*任意の* `SSH_HOST`・`SSH_USER`・`SSH_KEY` の値の組み合わせにおいて、いずれか1つ以上が空文字または未設定である場合、`release_all.sh` は必ず不足パラメータ名を含むエラーメッセージを出力し `exit 1` で終了しなければならない。
+### Property 3: 接続情報のハードコード禁止
 
-**Validates: Requirements 10.2**
+接続情報（ホスト名・ユーザー名・秘密鍵パス）はシェルスクリプト内にハードコードしないこと。実行時引数または設定ファイルから取得すること。
 
----
+**Validates: Requirements 6.6**
 
-## Error Handling
+### Property 4: ログ出力フォーマット準拠
 
-### 7.1 エラーコード体系（拡張分）
+ログ出力フォーマットは既存のログ設計書に準拠し、`[YYYY-MM-DD HH:MM:SS] [LEVEL] メッセージ` 形式であること。
 
-> 既存の `CommandA.sh` エラーコード（E101〜E402）は変更しない。拡張分は E5xx 番台を使用する。
-
-| エラーコード | 発生箇所 | エラー内容 | 対処 |
-|------------|---------|-----------|------|
-| `E501` | `release_all.sh` | パラメータ未設定（SSH_HOST/SSH_USER/SSH_KEY） | エラーログ出力・`exit 1` |
-| `E502` | `release_all.sh` | 秘密鍵ファイル不存在 | エラーログ出力・`exit 1` |
-| `E503` | `release_all.sh` | サーバB疎通確認失敗 | エラーログ出力・`exit 1` |
-| `E504` | `release_all.sh` | CommandA.sh 実行失敗 | エラーログ出力・`exit 1` |
-| `E505` | `release_all.sh` | SCP転送失敗 | エラーログ出力（転送元・転送先含む）・`exit 1` |
-| `E506` | `release_all.sh` | SSHリモート実行失敗 | エラーログ出力（コマンド・RC値含む）・`exit 1` |
-| `E601` | `CommandB.sh` | ログディレクトリ作成失敗 | エラーログ出力・`exit 1` |
-| `E602` | `CommandB.sh` | コマンド実行失敗（RC≠0） | エラーログ出力・`exit 1` |
-
-### 7.2 ReturnCode 取り扱い規則
-
-SSH/SCP コマンドの `$?` は実行直後に変数 `rc` へ退避してから `check_rc()` に渡す。
-
-```bash
-# 良い例
-scp -i "${SSH_KEY}" "${CMD_B_SH}" "${SSH_USER}@${SSH_HOST}:${CMD_B_REMOTE}" 2>&1
-rc=$?
-log_rc "${rc}"
-check_rc "${rc}" 0 "E505" "SCP転送失敗: ${CMD_B_SH} -> ${SSH_USER}@${SSH_HOST}:${CMD_B_REMOTE}"
-```
-
-### 7.3 エラー発生時の動作保証
-
-| 処理フェーズ | エラー発生時の動作 |
-|------------|----------------|
-| パラメータチェック失敗 | SCP/SSH 実行前に中断・`exit 1` |
-| 疎通確認失敗 | SCP/SSH 実行前に中断・`exit 1` |
-| CommandA.sh 失敗 | SCP/SSH 実行前に中断・`exit 1` |
-| SCP転送失敗 | SSH実行前に中断・`exit 1` |
-| SSHリモート実行失敗 | 即時中断・`exit 1` |
-
----
+**Validates: Requirements 8.3**
 
 ## Testing Strategy
 
-### 8.1 テスト全体方針
+### テスト方針
 
 | テスト種別 | 目的 | 対象 |
 |-----------|------|------|
-| スモークテスト | スクリプトの存在・権限・基本起動確認 | 全3ファイル |
-| ユニットテスト（例示ベース） | 各関数の正常系・異常系動作確認 | 共通関数・各処理関数 |
-| プロパティベーステスト | 普遍的な性質の検証（全入力で成立） | ログ出力・パラメータチェック |
-| 結合テスト | SSH/SCP モックを使用した処理フロー確認 | `release_all.sh` 全体フロー |
+| 単体試験（サーバA） | CommandA.shの全25コマンド動作確認 | CommandA.sh |
+| 単体試験（サーバB） | CommandB.shの動作確認（サーバB上で直接実行） | CommandB.sh |
+| 結合試験 | Orchestrator_Shell経由でのサーバA→B連携確認 | release_all.sh全体フロー |
 
-### 8.2 スモークテスト
+### 証跡取得
 
-| テスト項目 | 確認内容 |
-|-----------|---------|
-| `release_all.sh` ファイル存在確認 | `/opt/release/scripts/release_all.sh` が存在し権限が `755` であること |
-| `CommandB.sh` ファイル存在確認 | `/opt/release/scripts/CommandB.sh` が存在し権限が `755` であること |
-| `CommandA.sh` 変更なし確認 | 既存 `CommandA.sh` の内容が変更されていないこと |
-
-### 8.3 ユニットテスト（例示ベース）
-
-#### 正常系テスト例
-
-| テスト項目 | テスト内容 | 確認事項 |
-|-----------|---------|---------|
-| パラメータ検証（正常） | 3引数すべて有効値で起動 | エラーなし・処理継続 |
-| SCP転送（正常） | SSH/SCPモックで成功を返却 | `log_info` に転送完了メッセージが記録される |
-| SSHリモート実行（正常） | SSH モックで成功を返却 | `log_info` に完了メッセージが記録される |
-| deploy_multi.sh（正常） | 全ファイルが存在する状態で実行 | 配置先に `755` で配置される |
-
-#### 異常系テスト例（エッジケース）
-
-| テスト項目 | テスト内容 | 確認事項 |
-|-----------|---------|---------|
-| `SSH_HOST` 空文字 | 引数1を空で起動 | `E501` エラー出力・`exit 1` |
-| `SSH_KEY` ファイル不存在 | 存在しないパスを指定 | `E502` エラー出力・`exit 1` |
-| 疎通確認失敗 | `ssh -o ConnectTimeout=10` がRC≠0 | `E503` エラー出力・`exit 1`・SCP不実行 |
-| `CommandA.sh` 失敗 | モックCommandA.shがexit 1を返却 | `E504` エラー出力・`exit 1`・SCP不実行 |
-| SCP転送失敗 | SCPモックがRC≠0 | `E505` エラー出力・`exit 1`・SSH不実行 |
-| SSHリモート実行失敗 | SSHモックがRC≠0 | `E506` エラー出力・`exit 1` |
-| 配置元ファイル不存在（deploy） | `CommandB.sh` を置かずに実行 | エラーメッセージ出力・`exit 1` |
-
-### 8.4 プロパティベーステスト（PBT）
-
-プロパティベーステストには **bash 向けの PBT フレームワーク（bats + 自作ジェネレーター）** または **Python の Hypothesis** を使用し、最低100回のイテレーションを実施する。
-
-#### プロパティ 1: ログ出力フォーマット準拠
-
-```
-テスト名: test_log_format_property
-タグ: Feature: multi-server-release-automation, Property 1: ログ出力フォーマット準拠
-対象関数: log_info / log_error / log_cmd / log_rc（release_all.sh・CommandB.sh 両方）
-ジェネレーター: ランダムな任意文字列（ASCII・マルチバイト・特殊文字を含む）
-検証内容: 出力各行が正規表現 \[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[(INFO|ERROR|CMD|RC)\] にマッチすること
-イテレーション: 100回以上
-```
-
-#### プロパティ 2: 必須パラメータ未設定時の拒否
-
-```
-テスト名: test_param_validation_property
-タグ: Feature: multi-server-release-automation, Property 2: 必須パラメータ未設定時の拒否
-対象: release_all.sh のパラメータチェック処理
-ジェネレーター: SSH_HOST・SSH_USER・SSH_KEY の値の組み合わせ（各値: 有効な文字列 or 空文字）
-               ただし1つ以上が空文字である組み合わせのみ生成
-検証内容: release_all.sh が必ず exit 1 で終了すること、かつシェル実行ログに空だったパラメータ名が含まれること
-イテレーション: 100回以上
-```
-
-### 8.5 結合テスト
-
-SSH/SCP モックスクリプトを用意し、`release_all.sh` の完全なフローをエンドツーエンドで確認する。
-
-| テスト項目 | 確認内容 |
-|-----------|---------|
-| 正常フロー | サーバA→SCP→SSH が順序通り実行され、全フェーズのログが記録される |
-| サーバA失敗中断 | CommandA.sh 失敗後に SCP・SSH が実行されないこと |
-| SCP失敗中断 | SCP失敗後に SSH が実行されないこと |
-| ログファイル生成確認 | `release_all_YYYYMMDDHHMMSS.log`・`release_all_detail_YYYYMMDDHHMMSS.log` が正しく生成されること |
-
----
-
-## 9. SSH/SCP 連携フロー（シーケンス図）
-
-```mermaid
-sequenceDiagram
-    participant Op as 担当者
-    participant A  as サーバA（release_all.sh）
-    participant CA as CommandA.sh
-    participant B  as サーバB
-
-    Op->>A: bash release_all.sh <HOST> <USER> <KEY>
-
-    rect rgb(240, 240, 255)
-        Note over A: [初期化] init_log / check_params
-        A->>A: LOG_DIR作成・ヘッダー出力
-        A->>A: SSH_HOST/SSH_USER/SSH_KEY 検証
-    end
-
-    rect rgb(240, 255, 240)
-        Note over A,B: [Phase 0] SSH疎通確認
-        A->>B: ssh -o ConnectTimeout=10 exit
-        alt 疎通確認失敗
-            B-->>A: RC≠0
-            A->>A: log_error(E503) / exit 1
-        else 疎通確認成功
-            B-->>A: RC=0
-            A->>A: log_info("サーバB接続確認完了")
-        end
-    end
-
-    rect rgb(255, 255, 240)
-        Note over A,CA: [Phase 1] サーバA処理
-        A->>CA: bash CommandA.sh（ローカル実行）
-        CA->>CA: init_log → check_env → proc_dir → proc_file → proc_service → proc_misc
-        alt CommandA.sh 失敗
-            CA-->>A: exit 1
-            A->>A: log_error(E504) / exit 1
-        else CommandA.sh 正常終了
-            CA-->>A: exit 0
-            A->>A: log_info("サーバA処理完了")
-        end
-    end
-
-    rect rgb(255, 240, 240)
-        Note over A,B: [Phase 2] SCP転送
-        A->>A: log_cmd(scp コマンド文字列)
-        A->>B: scp -i ${SSH_KEY} CommandB.sh ${SSH_USER}@${SSH_HOST}:/opt/release/scripts/
-        alt SCP失敗
-            B-->>A: RC≠0
-            A->>A: log_rc(RC) / log_error(E505) / exit 1
-        else SCP成功
-            B-->>A: RC=0
-            A->>A: log_rc(0) / log_info("SCP転送完了")
-        end
-    end
-
-    rect rgb(240, 255, 255)
-        Note over A,B: [Phase 3] SSHリモート実行
-        A->>A: log_cmd(ssh コマンド文字列)
-        A->>B: ssh -i ${SSH_KEY} ${SSH_USER}@${SSH_HOST} bash /opt/release/scripts/CommandB.sh
-        B->>B: init_log → check_env_b → proc_dir_b → proc_file_b → proc_service_b
-        alt SSHリモート実行失敗
-            B-->>A: exit 1 / RC≠0
-            A->>A: log_rc(RC) / log_error(E506) / exit 1
-        else SSHリモート実行成功
-            B-->>A: exit 0 / RC=0
-            A->>A: log_rc(0) / log_info("SSHリモート実行完了")
-        end
-    end
-
-    A->>A: log_info("全処理正常終了") / exit 0
-    A-->>Op: 正常終了
-```
-
----
-
-## 10. 既存 CommandA.sh との整合性
-
-| 観点 | 方針 |
-|------|------|
-| ファイル内容 | `CommandA.sh` は一切変更しない |
-| 実行方式 | `release_all.sh` から `bash ${SCRIPT_DIR}/CommandA.sh` としてローカル起動する |
-| 共通関数仕様 | `log_info` / `log_error` / `log_cmd` / `log_rc` / `check_rc` / `check_str` の引数・動作は `CommandA.sh` の実装と完全一致させる |
-| エラーコード | `CommandA.sh` の E1xx〜E4xx を維持し、拡張分は E5xx〜E6xx を使用する |
-| ログディレクトリ | `/var/log/release/` を共有する（ファイル名でスクリプトを識別） |
-| ログフォーマット | ログ設計書.md「5. ログ出力フォーマット」の共通ルールを全スクリプトで遵守する |
-
----
-
-## 11. 制約・前提条件
-
-| # | 区分 | 内容 |
-|---|------|------|
-| 1 | 前提 | サーバAからサーバBへのSSH公開鍵認証が事前に設定済みであること |
-| 2 | 前提 | サーバBに `/opt/release/scripts/` ディレクトリの作成権限があること |
-| 3 | 前提 | サーバBに `/var/log/release/` ディレクトリの作成権限があること |
-| 4 | 前提 | サーバBに `bash` コマンドが存在すること |
-| 5 | 制約 | `SSH_HOST`・`SSH_USER`・`SSH_KEY` はシェルスクリプト内にハードコードしない |
-| 6 | 制約 | パスワード・パスフレーズはログに記録しない |
-| 7 | 制約 | `CommandA.sh` の実装は変更しない |
-| 8 | スコープ外 | サーバBのSSH公開鍵認証セットアップ手順は本プロジェクトのスコープ外とする |
+- 単体試験：Teratermログ・シェル実行ログ・詳細ログ（サーバA）
+- 結合試験：Orchestrator_Shellログ・SCP転送ログ・CommandB.sh実行ログ（サーバA・B）

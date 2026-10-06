@@ -1,260 +1,276 @@
 # Requirements Document
 
-## 複数サーバ対応リリース作業自動化 - シェルスクリプト拡張
-
----
-
 ## Introduction
 
-本ドキュメントは、既存の単一サーバ向けリリース作業自動化スクリプト（`CommandA.sh`）を、
-複数サーバ（サーバA・サーバB）対応に拡張するための要件を定義する。
+本書は「複数サーバ対応リリース作業自動化（Kiro導入）プロジェクト」の全要件を定義するものです。
+**第1部：開発計画書の要件**と**第2部：システム機能要件**の2部構成とする。
 
-現状、資材（シェルスクリプト）はサーバAに格納されており、サーバAでの処理（25コマンド）のみが
-自動化されている。本拡張では、サーバAでの処理完了後にサーバBへ資材を転送（SCP）し、
-SSH経由でサーバBのコマンドをリモート実行する機能を追加する。
+### 第1部について
+開発計画書の要件を定義する。
 
-### 拡張方針
+現状、単一サーバ（サーバA）向けの手動Linuxコマンドをシェルスクリプト化することでリリース作業の自動化を進めています。
+本プロジェクトでは、その自動化の範囲をサーバBへ拡張し、複数サーバに対するリリース作業を統合的に自動実行する仕組みを構築します。
+さらに、AIコーディングアシスタント「Kiro」を各工程に継続導入することで、①作業時間の短縮、②人が行う作業の手間削減、③人為的な作業ミスの防止を実現します。
 
-- 既存の `CommandA.sh`（サーバA向け25コマンド）の動作は変更しない
-- 新たに `CommandB.sh`（サーバB向けコマンド群）をサーバA上に作成する
-- サーバA処理完了後にサーバBへ資材転送・リモート実行を行うオーケストレーターシェルを新設する
-- 既存の共通関数（`log_info()`, `log_error()`, `log_cmd()`, `log_rc()`, `check_rc()`, `check_str()`）を継承する
-
----
+開発計画書は以下6つの観点で構成されます。
+- プロジェクト概要
+- スコープ（作業範囲・成果物）
+- スケジュール（マイルストーン）
+- コスト・予算
+- 体制
+- リスク管理
 
 ## Glossary
 
-| 用語 | 定義 |
-|------|------|
-| **Multi_Release_Script** | 複数サーバ対応リリース作業自動化システム全体 |
-| **Orchestrator** | `release_all.sh`。サーバAの処理完了後にサーバBへの資材転送・リモート実行を制御するオーケストレーターシェル |
-| **ServerA_Script** | `CommandA.sh`。サーバA上でローカル実行される既存の自動化シェル（25コマンド） |
-| **ServerB_Script** | `CommandB.sh`。サーバB上でリモート実行される自動化シェル |
-| **Deploy_Script** | `deploy_multi.sh`。複数サーバ向けの資材配置シェル |
-| **サーバA** | `CommandA.sh` および `CommandB.sh` の資材が格納されている実行元サーバ |
-| **サーバB** | サーバAからSCPで資材を受け取り、コマンドを実行する対象サーバ |
-| **SSH接続** | サーバAからサーバBへのSecure Shell接続 |
-| **SCP転送** | SSH経由でのファイル転送（Secure Copy Protocol） |
-| **EARS** | Easy Approach to Requirements Syntax。要件記述パターン |
-| **ReturnCode** | Linuxコマンド実行後の終了コード（`$?`） |
-| **LOG_DIR** | ログ出力ディレクトリ `/var/log/release/` |
-| **SCRIPT_DIR** | スクリプト配置ディレクトリ `/opt/release/scripts/` |
-| **WORK_DIR** | 作業ディレクトリ `/tmp/testdir/` |
-| **SSH_USER** | サーバBへのSSH接続ユーザー名 |
-| **SSH_HOST** | サーバBのホスト名またはIPアドレス |
-| **SSH_KEY** | サーバBへの公開鍵認証用秘密鍵ファイルパス |
-
----
+- **開発計画書**：プロジェクトの目的・スコープ・スケジュール・体制・リスクを一覧化した管理文書
+- **複数サーバ対応リリース作業自動化**：サーバA・サーバBを対象とし、手動コマンド手順をシェルスクリプト化して人手介入を最小化するプロセス
+- **Kiro**：AIコーディングアシスタント。自動コード生成・レビュー支援を提供する
+- **Shell**：Linuxコマンドを記述した実行可能なシェルスクリプトファイル
+- **サーバA**：既存の自動化対象サーバ。CommandA.shを実行する主系サーバ
+- **サーバB**：新たに自動化対象として追加するサーバ。サーバAからSCP/SSHで資材転送・リモート実行を行う
+- **オーケストレーターシェル**：サーバAおよびサーバBへの処理を一括実行・制御するシェルスクリプト
+- **資材配置シェル**：試験対象のシェルスクリプトを所定のディレクトリへ配置するためのシェルスクリプト
+- **SCP**：SSH接続を利用してサーバ間でファイルを転送するコマンド
+- **SSH**：暗号化された通信でリモートサーバのコマンドを実行するプロトコル
+- **証跡**：試験実施の結果を示すログ・スクリーンショット等の記録物
+- **項目表**：試験の実施項目・手順・合否判定基準をまとめた表
+- **外部設計書**：システムの外部インターフェースや入出力を定義した設計文書
+- **内部設計書**：シェルスクリプトの内部処理ロジックを定義した設計文書
+- **ディレクトリ定義書**：ファイルおよびディレクトリの配置構造を定義した文書
+- **Teraterm**：LinuxへSSH接続するターミナルエミュレータ。単体試験での操作ログ取得に使用する
+- **担当者**：手動コマンド手順を開発チームへ提供する業務担当者
+- **開発チーム**：シェルスクリプトの設計・製造・試験を行う技術担当者のグループ
 
 ## Requirements
 
+### Requirement 1: プロジェクト概要
+
+**User Story:** 開発チームのメンバーとして、複数サーバ対応プロジェクトの背景・目的・対象システムを理解したい。そうすることで、開発計画書にプロジェクト概要が明確に記述されている状態で作業を開始できる。
+
+#### Acceptance Criteria
+
+1. THE 開発計画書 SHALL プロジェクトの背景として「単一サーバ向け自動化（CommandA.sh）を複数サーバ（サーバA・サーバB）に拡張する必要性」を記述する
+2. THE 開発計画書 SHALL 自動化の目的として「作業時間の短縮」「人が行う作業の手間削減」「人為的な作業ミスの防止」の3点を記述する
+3. THE 開発計画書 SHALL Kiro導入の位置づけとして「各工程の作業効率を向上させるAIコーディングアシスタントの活用」を記述する
+4. THE 開発計画書 SHALL 対象工程として「要件定義・設計・製造・単体試験・結合試験」の5工程を記述する
+5. THE 開発計画書 SHALL システム構成として「サーバA・サーバB・担当者・開発チーム」の関係を記述する
+6. WHEN 開発計画書を参照する利害関係者がプロジェクト概要を読んだ場合、THE 開発計画書 SHALL 複数サーバ対応の背景・目的・全体スコープを一読で把握できる構成であること
+
+### Requirement 2: スコープと成果物
+
+**User Story:** プロジェクトマネージャーとして、何を作り何を作らないかを明確にしたい。そうすることで、スコープと成果物の一覧を開発計画書に定義できる。
+
+#### Acceptance Criteria
+
+1. THE 開発計画書 SHALL 作業範囲として「要件定義・設計・製造・単体試験・結合試験」の各工程を対象範囲として明示する
+2. THE 開発計画書 SHALL 各工程の成果物として、既存成果物（CommandA.sh等）に加え複数サーバ対応の新規成果物（CommandB.sh・オーケストレーターシェル・複数サーバ向け資材配置シェル）を含めて定義する
+3. THE 開発計画書 SHALL 各工程の証跡として、サーバA向け証跡（Teratermログ・シェル実行ログ・詳細ログ）およびサーバB向け証跡（SSH/SCPログ・リモート実行ログ）を定義する
+4. THE 開発計画書 SHALL Kiro導入によって各成果物の作成プロセスがどのように変化するかを工程ごとに明示する
+5. IF Kiroが自動生成した成果物が存在する場合、THEN THE 開発計画書 SHALL 「AIが生成したドラフトに対して人がレビュー・確認を行う」旨をスコープ定義に含める
+6. THE 開発計画書 SHALL 証跡取得はKiroによる整理・記録支援の対象であることを明示する
+7. THE 開発計画書 SHALL サーバAの既存コマンド一覧（全25コマンド）をスコープの一部として記載する
+8. THE 開発計画書 SHALL サーバB向けコマンド構成をCommandA.shと同等の構造で定義することをスコープに含める
+
+### Requirement 3: スケジュール
+
+**User Story:** プロジェクトマネージャーとして、プロジェクト全体の進捗を管理したい。そうすることで、工程ごとのマイルストーンとスケジュールを開発計画書に定義できる。
+
+#### Acceptance Criteria
+
+1. THE 開発計画書 SHALL 要件定義・設計・製造・単体試験・結合試験の各工程に対応するマイルストーンを定義する
+2. THE 開発計画書 SHALL 各マイルストーンに対して完了条件（成果物の承認・レビュー完了など）を明記する
+3. THE 開発計画書 SHALL Kiro導入後の工数削減率を考慮したスケジュール見積もりの根拠を記述する
+4. THE 開発計画書 SHALL 工程間の依存関係（サーバAの単体試験完了後に複数サーバ結合試験を開始するなど）を明示する
+5. THE 開発計画書 SHALL 複数サーバ対応固有の工程（サーバB向けシェル作成・SSH/SCP連携確認）をスケジュールに含める
+6. WHEN マイルストーンが未達成となった場合、THE 開発計画書 SHALL 後続工程への影響範囲を特定できるよう依存関係を定義する
+
+### Requirement 4: コスト・予算
+
+**User Story:** プロジェクトマネージャーとして、プロジェクト全体のコストを管理したい。そうすることで、工程ごとの工数見積もりとKiro導入による削減効果を開発計画書に定義できる。
+
+#### Acceptance Criteria
+
+1. THE 開発計画書 SHALL 各工程の工数見積もり（導入前・導入後）を記述する
+2. THE 開発計画書 SHALL Kiro導入による工数削減効果として、要件定義20〜30%・設計40〜50%・製造50〜60%・単体試験準備30〜40%・結合試験準備30〜40%・証跡取得30〜40%の削減率を工程ごとに記述する
+3. THE 開発計画書 SHALL 証跡のログ出力はLinux環境での実行に依存するが、Kiroによる整理・記録支援により工数削減が見込めることを明示する
+4. THE 開発計画書 SHALL Kiroツールの利用コストをプロジェクト予算の構成要素として含める
+5. IF 工数削減効果が当初見積もりを下回った場合、THEN THE 開発計画書 SHALL 超過コストへの対処方針を定義する
+
+### Requirement 5: 体制
+
+**User Story:** プロジェクトメンバーとして、誰がどの役割を担うかを把握したい。そうすることで、プロジェクト体制を開発計画書に定義できる。
+
+#### Acceptance Criteria
+
+1. THE 開発計画書 SHALL プロジェクトの役割として「担当者（手動コマンド手順の提供者）」「開発チーム（シェルスクリプト作成者）」を定義する
+2. THE 開発計画書 SHALL Kiroを各工程の補助ツールとして体制図に位置づける
+3. THE 開発計画書 SHALL Kiroが生成した成果物のレビュー・最終承認は人（開発チーム）が行うことを各役割の責任範囲として明示する
+4. THE 開発計画書 SHALL 担当者から開発チームへの手動コマンド手順の連携フローを体制の中で定義する
+5. WHILE プロジェクトが進行している間、THE 開発計画書 SHALL 各工程における担当者・開発チーム・Kiroの役割分担が明確であること
+
+### Requirement 6: リスク管理
+
+**User Story:** プロジェクトマネージャーとして、プロジェクト上のリスクを事前に把握し対策を立てたい。そうすることで、リスクと対策を開発計画書に定義できる。
+
+#### Acceptance Criteria
+
+1. THE 開発計画書 SHALL Kiro導入に関するリスクとして「AIが生成した成果物の品質が要求水準を満たさないリスク」「Kiroへの過度な依存により人のスキルが低下するリスク」「機密情報をKiroに入力することによる情報漏洩リスク」を定義する
+2. THE 開発計画書 SHALL サーバ間通信に関するリスクとして「SSH/SCP接続失敗リスク」「サーバB上でのリモート実行失敗リスク」を定義する
+3. THE 開発計画書 SHALL 各リスクに対して発生確率・影響度・対策を定義する
+4. THE 開発計画書 SHALL リスク対策として「AIが生成した成果物に対して人によるレビューを必須とする」ことを明記する
+5. IF Kiroが生成したシェルスクリプトに誤りが含まれていた場合、THEN THE 開発計画書 SHALL 誤りを検出・修正するレビュープロセスが定義されていること
+6. THE 開発計画書 SHALL スケジュール遅延リスクとして「証跡整理の品質はKiroの出力に依存するため、人による確認が必須」であることを明示する
+7. WHEN 新たなリスクが識別された場合、THE 開発計画書 SHALL リスク一覧を更新するプロセスを定義する
+
+### Requirement 7: 導入前後の比較
+
+**User Story:** プロジェクトのステークホルダーとして、Kiro導入の投資対効果を理解したい。そうすることで、導入前後の比較を開発計画書で参照できる。
+
+#### Acceptance Criteria
+
+1. THE 開発計画書 SHALL 工程ごとの「導入前の作業方法」と「導入後の作業方法（Kiro活用）」を対比形式で記述する
+2. THE 開発計画書 SHALL Kiroの主要活用機能として「ドラフト自動生成（要件定義書・設計書・項目表）」「シェルスクリプト自動生成」「試験データ自動生成」「コードレビュー支援（ベストプラクティスチェック・セキュリティリスク検出）」を記述する
+3. THE 開発計画書 SHALL 工数削減効果を工程ごとに削減率（パーセント）で示す比較表を含める
+4. THE 開発計画書 SHALL 「人によるレビュー・確認は必須であり、AIの出力を無条件に信頼しない」ことを効果の制約として明示する
+5. WHEN ステークホルダーがKiro導入の意思決定を行う場合、THE 開発計画書 SHALL 導入効果と制約条件の両方を判断材料として提供できること
+
 ---
 
-### 要件1：オーケストレーター機能
+## 第2部：システム機能要件
 
-**ユーザーストーリー：** 担当者として、単一のシェルを実行するだけでサーバAとサーバBの両方のリリース処理が順番に自動実行されるようにしたい。そうすることで、複数サーバへの手動操作を排除し、リリース作業を効率化できる。
+### はじめに
+
+本部は「複数サーバ対応リリース作業自動化」プロジェクトのシステム機能要件を定義する。
+サーバA向けに既存のCommandA.sh（全25コマンド）を自動実行するとともに、サーバB向けに同等構造のCommandB.shを新規作成し、サーバAからSCP/SSH経由でサーバBへ資材転送・リモート実行する複数サーバ対応の自動化基盤を構築することが目的である。
+
+### 追加用語
+
+- **複数サーバ対応リリース作業自動化システム（Multi_Release_System）**: 本プロジェクト全体の自動化基盤。
+- **担当者（PIC）**: 手動コマンド手順を開発チームに展開する役割。
+- **開発チーム（Dev_Team）**: 担当者から受け取ったコマンドをシェルに変換・開発・試験する役割。
+- **サーバA（Server_A）**: 既存の自動化対象サーバ。CommandA.shを直接実行する主系サーバ。
+- **サーバB（Server_B）**: 新たに自動化対象として追加するサーバ。SCP/SSH経由で資材転送・リモート実行を受ける。
+- **シェルスクリプト（Shell_Script）**: リリース作業を自動実行するLinuxシェルスクリプト（.sh）。
+- **オーケストレーターシェル（Orchestrator_Shell）**: サーバAでの処理とサーバBへの転送・実行を一括制御するシェルスクリプト。
+- **Linux環境（Linux_Env）**: シェルスクリプトが実際に実行される本番および試験用のLinuxサーバ環境。
+- **資材配置シェル（Deploy_Shell）**: 試験前にシェルスクリプトをLinux_Envへ配置するシェルスクリプト。
+- **項目表（Test_Sheet）**: 試験工程において実行するテストケースと確認観点を記載した表形式のドキュメント。
+- **証跡（Evidence）**: 試験実行結果を証明するログファイルおよびスクリーンショット。
+
+---
+
+### 機能要件1：サーバA向けシェルスクリプトの自動実行
+
+**User Story:** 開発チームとして、既存のCommandA.sh（全25コマンド）をサーバA上で正しく自動実行したい。そうすることで、サーバA向けリリース作業の自動化基盤を確立できる。
 
 #### 受け入れ基準
 
-1. THE Multi_Release_Script SHALL `release_all.sh`（Orchestrator）を提供し、サーバAの処理・サーバBへの資材転送・サーバBのリモート実行を1回の実行で完結させる
-
-2. WHEN `release_all.sh` が起動されたとき、THE Orchestrator SHALL サーバA処理（ServerA_Script）を先に実行し、サーバA処理が正常終了した場合にのみサーバBへの処理を継続する
-
-3. THE Orchestrator SHALL 実行順序を「サーバA処理 → サーバBへの資材転送（SCP） → サーバBでのリモート実行（SSH）」の順序で保証する
-
-4. WHEN サーバA処理がエラー終了したとき、THE Orchestrator SHALL サーバBへの資材転送およびリモート実行を行わずに処理を中断し、`exit 1` で終了する
-
-5. THE Orchestrator SHALL 処理開始時に実行対象サーバ（サーバA、サーバB）の情報をシェル実行ログに出力する
+1. WHEN CommandA.shをServer_Aで実行したとき、THE Shell_Script SHALL 手動コマンド手順書に記載された全25コマンドを順番どおり実行する。
+2. THE Shell_Script SHALL エラーハンドリングを含み、異常発生時に処理を中断してエラーメッセージを出力する。
+3. IF Shell_Scriptの実行中にエラーが発生した場合、THEN THE Shell_Script SHALL 実行ログにエラー内容を記録し、処理を終了する。
+4. THE Shell_Script SHALL Server_Aで実行可能なbash構文に準拠する。
+5. WHEN CommandA.shが正常完了したとき、THE Linux_Env SHALL シェル実行ログおよび詳細ログをServer_A上の所定ディレクトリへ出力する。
+6. WHERE 既存のCommandA.shに修正が必要な場合、THE Dev_Team SHALL Kiroを使用して修正内容を確認したうえで反映する。
 
 ---
 
-### 要件2：サーバA処理（既存機能の継承）
+### 機能要件2：サーバB向けシェルスクリプトの作成
 
-**ユーザーストーリー：** 担当者として、既存の `CommandA.sh` が持つ25コマンドの自動実行機能を、複数サーバ対応後も変更なく動作させたい。そうすることで、既存の試験済み資産を継承し、手戻りを防止できる。
+**User Story:** 開発チームとして、CommandA.shと同等の構造を持つサーバB向けシェルスクリプト（CommandB.sh）を新規作成したい。そうすることで、サーバB上でもリリース作業を自動実行できる。
 
 #### 受け入れ基準
 
-1. THE Orchestrator SHALL 既存の `CommandA.sh` をサーバA上でローカル実行する（既存スクリプトの動作は変更しない）
-
-2. WHEN `CommandA.sh` が正常終了（ReturnCode=0）したとき、THE Orchestrator SHALL サーバBへの処理に進む
-
-3. IF `CommandA.sh` の実行に失敗したとき、THEN THE Orchestrator SHALL エラーコードと詳細メッセージをシェル実行ログおよび詳細ログに記録し、`exit 1` で終了する
-
-4. THE ServerA_Script SHALL 既存の処理フロー（`init_log` → `check_env` → `proc_dir` → `proc_file` → `proc_service` → `proc_misc`）を維持する
+1. WHEN 担当者からサーバB向けのコマンド手順が展開されたとき、THE Dev_Team SHALL Kiroを使用してCommandB.shのドラフトを生成する。
+2. WHEN KiroがCommandB.shのドラフトを生成したとき、THE Dev_Team SHALL 生成結果を確認し、Server_B環境に合わせた修正・調整を行う。
+3. THE Shell_Script SHALL CommandA.shと同等のログ出力構造・エラーハンドリング構造を持つ。
+4. THE Shell_Script SHALL Server_Bで実行可能なbash構文に準拠する。
+5. IF CommandB.shの実行中にエラーが発生した場合、THEN THE Shell_Script SHALL 実行ログにエラー内容を記録し、処理を終了する。
+6. WHERE サーバB固有のコマンドが含まれる場合、THE Dev_Team SHALL CommandA.shとの差分を明示したうえでCommandB.shを作成する。
 
 ---
 
-### 要件3：サーバBへの資材転送（SCP）
+### 機能要件3：複数サーバ向け設計ドキュメントの生成
 
-**ユーザーストーリー：** 担当者として、サーバAに格納されたサーバB向け資材（`CommandB.sh`）がサーバBの所定ディレクトリへ自動転送されるようにしたい。そうすることで、手動のファイル転送作業を排除できる。
+**User Story:** 開発チームとして、複数サーバ対応に必要な設計ドキュメントを効率的に作成したい。そうすることで、設計工程の作業時間を削減し、レビュー品質を高める。
 
 #### 受け入れ基準
 
-1. WHEN サーバA処理が正常終了したとき、THE Orchestrator SHALL `scp` コマンドを使用してサーバBへ `CommandB.sh` を転送する
-
-2. THE Orchestrator SHALL SCP転送先パスを `/opt/release/scripts/CommandB.sh` とする
-
-3. THE Orchestrator SHALL SCP転送時に公開鍵認証（`-i ${SSH_KEY}`）を使用する
-
-4. THE Orchestrator SHALL SCP転送コマンドの実行前に `log_cmd()` でコマンド文字列を詳細ログに記録する
-
-5. THE Orchestrator SHALL SCP転送コマンドの実行後に ReturnCode を `log_rc()` で詳細ログに記録する
-
-6. IF SCP転送が失敗したとき（ReturnCode≠0）、THEN THE Orchestrator SHALL エラーメッセージをシェル実行ログに記録し、`exit 1` で終了する
-
-7. WHEN SCP転送が正常完了したとき、THE Orchestrator SHALL 転送完了メッセージを `log_info()` でシェル実行ログに記録する
+1. WHEN 要件定義書が確定したとき、THE Kiro SHALL 複数サーバ対応を反映した外部設計書のドラフトを生成する。
+2. WHEN 外部設計書のドラフトが生成されたとき、THE Kiro SHALL 複数サーバ対応を反映した内部設計書のドラフトを生成する。
+3. THE Kiro SHALL CommandA.sh・CommandB.sh・Orchestrator_ShellのコードからDir_Definitionを自動生成する。
+4. WHEN 設計ドキュメントのドラフトが生成されたとき、THE Dev_Team SHALL 各設計書を人がレビューして内容を確定する。
+5. IF 設計書の内容に誤りや矛盾が発見された場合、THEN THE Dev_Team SHALL 該当箇所を修正して再レビューを行う。
 
 ---
 
-### 要件4：サーバBでのリモート実行（SSH）
+### 機能要件4：複数サーバ向け試験項目表および資材配置シェルの生成
 
-**ユーザーストーリー：** 担当者として、転送されたサーバB向け資材が、SSH経由で自動実行されるようにしたい。そうすることで、サーバBへの手動ログインおよびコマンド実行を排除できる。
+**User Story:** 開発チームとして、複数サーバ対応の各試験工程で必要な項目表と資材配置シェルを効率的に準備したい。そうすることで、試験準備にかかる工数を削減する。
 
 #### 受け入れ基準
 
-1. WHEN SCP転送が正常完了したとき、THE Orchestrator SHALL `ssh` コマンドを使用してサーバB上で `CommandB.sh` をリモート実行する
-
-2. THE Orchestrator SHALL SSHリモート実行時に公開鍵認証（`-i ${SSH_KEY}`）を使用する
-
-3. THE Orchestrator SHALL SSHリモート実行コマンドの実行前に `log_cmd()` でコマンド文字列を詳細ログに記録する
-
-4. THE Orchestrator SHALL SSHリモート実行コマンドの実行後に ReturnCode を `log_rc()` で詳細ログに記録する
-
-5. IF SSHリモート実行が失敗したとき（ReturnCode≠0）、THEN THE Orchestrator SHALL エラーメッセージをシェル実行ログに記録し、`exit 1` で終了する
-
-6. WHEN SSHリモート実行が正常完了したとき、THE Orchestrator SHALL 完了メッセージを `log_info()` でシェル実行ログに記録する
+1. WHEN 設計ドキュメントが確定したとき、THE Kiro SHALL サーバA・サーバB各向けの単体試験および複数サーバ結合試験のTest_Sheetドラフトを生成する。
+2. THE Kiro SHALL Test_Sheetに実行するシェルスクリプト名、確認観点、期待値、合否判定欄を含める。
+3. WHEN Test_Sheetのドラフトが生成されたとき、THE Kiro SHALL 複数サーバに対応したDeploy_Shellのドラフトを生成する。
+4. THE Deploy_Shell SHALL CommandA.sh・CommandB.shおよびテストデータをLinux_Envの所定ディレクトリへ配置する処理を含む。
+5. THE Kiro SHALL 試験に必要な試験データのドラフトを自動生成する。
+6. WHEN ドラフトが生成されたとき、THE Dev_Team SHALL Test_Sheet・Deploy_Shellおよび試験データの内容を確認して確定する。
+7. IF Deploy_Shell実行時に配置先ディレクトリが存在しない場合、THEN THE Deploy_Shell SHALL ディレクトリを作成してから配置処理を実行する。
 
 ---
 
-### 要件5：サーバB側スクリプト（CommandB.sh）
+### 機能要件5：サーバAでの単体試験の実施と証跡取得
 
-**ユーザーストーリー：** 担当者として、サーバB固有の処理（ファイル展開・サービス再起動等）がスクリプト化されており、SSH経由で確実に実行されるようにしたい。そうすることで、サーバBの作業手順を標準化し、手作業による操作ミスを防止できる。
+**User Story:** 開発チームとして、サーバA上でCommandA.shの単体試験を実施し、証跡を取得したい。そうすることで、サーバA向けシェルスクリプトの動作を個別に検証できる。
 
 #### 受け入れ基準
 
-1. THE ServerB_Script SHALL サーバB上で独立して実行可能な bash シェルスクリプトとして実装する
-
-2. THE ServerB_Script SHALL 既存の共通関数（`log_info()`, `log_error()`, `log_cmd()`, `log_rc()`, `check_rc()`, `check_str()`）を `CommandA.sh` と同一の仕様で実装する
-
-3. THE ServerB_Script SHALL 処理開始時に `init_log` 処理を実行し、ログディレクトリの作成とログヘッダーの出力を行う
-
-4. THE ServerB_Script SHALL ログファイルを `CommandB_YYYYMMDDHHMMSS.log` および `CommandB_detail_YYYYMMDDHHMMSS.log` の命名規則で `/var/log/release/` に出力する
-
-5. THE ServerB_Script SHALL サーバB固有の各コマンド実行後に ReturnCode チェック（`check_rc()`）または出力文字列チェック（`check_str()`）を実施する
-
-6. IF コマンド実行でエラーが発生したとき、THEN THE ServerB_Script SHALL エラー内容を詳細ログに記録し、`exit 1` で終了する
+1. WHEN サーバA向け単体試験を実施するとき、THE Dev_Team SHALL Deploy_Shellを実行してServer_AへShell_Scriptを配置する。
+2. WHEN CommandA.shをServer_Aで実行したとき、THE Linux_Env SHALL Teratermログ（コマンド実行ログ）を出力する。
+3. WHEN CommandA.shをServer_Aで実行したとき、THE Linux_Env SHALL シェル実行ログ（処理メッセージ出力）を出力する。
+4. WHEN CommandA.shをServer_Aで実行したとき、THE Linux_Env SHALL 詳細ログ（コマンド実行結果ログ）を出力する。
+5. WHEN 試験が完了したとき、THE Dev_Team SHALL 上記3種のログをKiroに入力し、証跡として整理・記録する。そのうえでTest_Sheetの合否を記録する。
+6. IF 試験結果が期待値と異なる場合、THEN THE Dev_Team SHALL 原因を調査してShell_Scriptを修正し、再試験を実施する。
 
 ---
 
-### 要件6：SSH接続前チェック
+### 機能要件6：サーバBへの資材転送とリモート実行
 
-**ユーザーストーリー：** 担当者として、SSH/SCP実行前に接続可否が確認されるようにしたい。そうすることで、接続できない状態でのSCP/SSHコマンド実行を防ぎ、エラー原因を早期特定できる。
+**User Story:** 開発チームとして、サーバAからサーバBへSCP経由で資材を転送し、SSH経由でCommandB.shをリモート実行したい。そうすることで、複数サーバへの統合的なリリース作業を自動化できる。
 
 #### 受け入れ基準
 
-1. WHEN `release_all.sh` が起動されたとき、THE Orchestrator SHALL SCP/SSH実行前に `ssh -o ConnectTimeout=10` を使用してサーバBへの疎通確認を実施する
-
-2. IF サーバBへの疎通確認が失敗したとき（ReturnCode≠0）、THEN THE Orchestrator SHALL 「サーバB接続不可」のエラーメッセージをシェル実行ログに記録し、`exit 1` で終了する
-
-3. THE Orchestrator SHALL 疎通確認コマンドの実行内容を `log_cmd()` で詳細ログに記録する
-
-4. WHEN 疎通確認が成功したとき、THE Orchestrator SHALL 「サーバB接続確認完了」メッセージを `log_info()` でシェル実行ログに記録し、後続のSCP/SSH処理に進む
+1. WHEN Orchestrator_ShellをServer_Aで実行したとき、THE Orchestrator_Shell SHALL SCP経由でCommandB.shおよび必要な資材をServer_Bの所定ディレクトリへ転送する。
+2. WHEN 資材転送が完了したとき、THE Orchestrator_Shell SHALL SSH経由でServer_B上のCommandB.shをリモート実行する。
+3. WHEN Server_Bでのリモート実行が完了したとき、THE Linux_Env SHALL Server_B上に実行ログおよび詳細ログを出力する。
+4. IF SCP転送中にエラーが発生した場合、THEN THE Orchestrator_Shell SHALL エラーログを記録し、以降の処理を中断する。
+5. IF SSH経由のリモート実行中にエラーが発生した場合、THEN THE Orchestrator_Shell SHALL Server_Bのエラー内容をServer_Aのログに記録し、処理を終了する。
+6. THE Orchestrator_Shell SHALL 接続情報（ホスト名・認証情報等）をハードコードせず、設定ファイルまたは実行時パラメータとして外部から指定できる構造とする。
 
 ---
 
-### 要件7：エラーハンドリング（SSH/SCP失敗）
+### 機能要件7：複数サーバ結合試験の実施と証跡取得
 
-**ユーザーストーリー：** 担当者として、SSH接続失敗・SCP転送失敗・リモートコマンド実行失敗が発生した場合に、エラー内容が明確にログに記録され、処理が即時中断されるようにしたい。そうすることで、障害原因の特定と対処を迅速に行える。
+**User Story:** 開発チームとして、複数サーバにまたがる結合試験を実施し、証跡を取得したい。そうすることで、サーバAとサーバBを組み合わせたリリース作業全体の動作を検証できる。
 
 #### 受け入れ基準
 
-1. IF SSH接続が失敗したとき（ReturnCode≠0）、THEN THE Orchestrator SHALL エラーコード・エラーメッセージ・対象ホスト名をシェル実行ログに記録し、`exit 1` で終了する
-
-2. IF SCP転送が失敗したとき（ReturnCode≠0）、THEN THE Orchestrator SHALL エラーコード・転送元ファイルパス・転送先パスをシェル実行ログに記録し、`exit 1` で終了する
-
-3. IF SSHリモート実行が失敗したとき（ReturnCode≠0）、THEN THE Orchestrator SHALL エラーコード・実行コマンド・ReturnCode 値をシェル実行ログおよび詳細ログに記録し、`exit 1` で終了する
-
-4. THE Orchestrator SHALL SSH/SCP コマンド実行後に `rc=$?` で ReturnCode を変数に退避してから `check_rc()` に渡す
-
-5. THE Orchestrator SHALL SSH/SCP エラーメッセージ出力に際して `2>&1` を使用してエラー出力を標準出力にリダイレクトしてからログに記録する
+1. WHEN 複数サーバ結合試験を実施するとき、THE Dev_Team SHALL Deploy_Shellを実行してServer_AおよびServer_BへShell_Scriptを配置する。
+2. WHEN Orchestrator_ShellをServer_Aで実行したとき、THE Linux_Env SHALL Server_AおよびServer_Bの全出力ログを生成する。
+3. WHEN Shell_ScriptがファイルやディレクトリをServer_B上で作成または削除したとき、THE Linux_Env SHALL その作成・削除結果をServer_Bのログに記録する。
+4. WHEN Server_B上でのリモート実行が完了したとき、THE Linux_Env SHALL SSH/SCP転送の実行結果をServer_Aのログに記録する。
+5. WHEN 試験が完了したとき、THE Dev_Team SHALL Server_A・Server_Bの全ログをKiroに入力し、証跡として整理・記録する。
+6. WHEN Kiroが証跡を整理したとき、THE Dev_Team SHALL 内容を確認して確定する。
 
 ---
 
-### 要件8：ログ出力（複数サーバ対応）
+### 機能要件8：Kiroによるコード品質チェック
 
-**ユーザーストーリー：** 担当者として、オーケストレーターの実行ログが既存のログ設計書のフォーマットに準拠して出力されるようにしたい。そうすることで、ログの可読性を統一し、障害調査や証跡確認を容易にできる。
+**User Story:** 開発チームとして、CommandA.sh・CommandB.sh・Orchestrator_Shellのベストプラクティス準拠とセキュリティリスクをKiroに自動チェックさせたい。そうすることで、人為的なコーディングミスやセキュリティ脆弱性を防止する。
 
 #### 受け入れ基準
 
-1. THE Orchestrator SHALL シェル実行ログを `release_all_YYYYMMDDHHMMSS.log`、詳細ログを `release_all_detail_YYYYMMDDHHMMSS.log` の命名規則で `/var/log/release/` に出力する
-
-2. THE Orchestrator SHALL 全てのログ出力を既存フォーマット `[YYYY-MM-DD HH:MM:SS] [LEVEL] メッセージ` に準拠して行う
-
-3. THE Orchestrator SHALL サーバA処理開始・完了、SCP転送開始・完了、SSHリモート実行開始・完了の各フェーズで `log_info()` を使用してシェル実行ログにメッセージを出力する
-
-4. WHILE `release_all.sh` が実行中であるとき、THE Orchestrator SHALL SSH/SCP の各コマンド実行内容を `log_cmd()` で詳細ログに記録し続ける
-
-5. THE Orchestrator SHALL ログファイルの権限を `644`（オーナー：読み書き、グループ/その他：読み取りのみ）に設定する
-
----
-
-### 要件9：資材配置シェルの複数サーバ対応拡張
-
-**ユーザーストーリー：** 担当者として、複数サーバ対応の全資材（`CommandB.sh`、`release_all.sh`）がサーバAの所定ディレクトリへ一括配置されるようにしたい。そうすることで、資材配置作業の手間を削減できる。
-
-#### 受け入れ基準
-
-1. THE Deploy_Script SHALL `deploy_multi.sh` として実装し、`CommandB.sh` および `release_all.sh` をサーバAの `/opt/release/scripts/` へ配置する
-
-2. THE Deploy_Script SHALL 各配置対象ファイルの存在確認を行い、配置元ファイルが存在しない場合はエラーメッセージを出力して `exit 1` で終了する
-
-3. THE Deploy_Script SHALL 配置先ディレクトリ `/opt/release/scripts/` が存在しない場合、`mkdir -p` で自動作成する
-
-4. THE Deploy_Script SHALL 配置した各スクリプトファイルに対して `chmod 755` で実行権限を付与する
-
-5. WHEN 全資材の配置が完了したとき、THE Deploy_Script SHALL 各ファイルの配置完了メッセージを標準出力に出力する
-
----
-
-### 要件10：セキュリティ要件
-
-**ユーザーストーリー：** 担当者として、SSH/SCPに使用する接続情報（ホスト名・ユーザー名・秘密鍵パス）がシェルスクリプトにハードコードされないようにしたい。そうすることで、機密情報の漏洩リスクを排除できる。
-
-#### 受け入れ基準
-
-1. THE Multi_Release_Script SHALL `SSH_HOST`、`SSH_USER`、`SSH_KEY` を実行時引数または設定ファイルから取得し、シェルスクリプト内にハードコードしない
-
-2. IF 実行時に `SSH_HOST`、`SSH_USER`、`SSH_KEY` のいずれかが未設定または空文字の場合、THEN THE Orchestrator SHALL 不足パラメータ名をエラーメッセージとして出力し、`exit 1` で終了する
-
-3. THE Multi_Release_Script SHALL `SSH_KEY` に指定された秘密鍵ファイルが存在しない場合、エラーメッセージを出力して `exit 1` で終了する
-
-4. THE Multi_Release_Script SHALL 秘密鍵ファイルのパスおよびホスト名をシェル実行ログおよび詳細ログに出力する場合、パスワードやパスフレーズは記録しない
-
----
-
-## 付録：処理フロー概要
-
-```
-release_all.sh 起動
-    │
-    ├─ init_log()                        # ログ初期化
-    │
-    ├─ パラメータチェック                  # SSH_HOST / SSH_USER / SSH_KEY 検証
-    │
-    ├─ check_ssh_connection()            # サーバBへの疎通確認
-    │     IF 失敗 → exit 1
-    │
-    ├─ [サーバA処理]
-    │   bash ${SCRIPT_DIR}/CommandA.sh
-    │     IF 失敗 → exit 1
-    │
-    ├─ [サーバBへの資材転送]
-    │   scp -i ${SSH_KEY} CommandB.sh ${SSH_USER}@${SSH_HOST}:/opt/release/scripts/
-    │     IF 失敗 → exit 1
-    │
-    ├─ [サーバBでのリモート実行]
-    │   ssh -i ${SSH_KEY} ${SSH_USER}@${SSH_HOST} bash /opt/release/scripts/CommandB.sh
-    │     IF 失敗 → exit 1
-    │
-    └─ 正常終了ログ出力 → exit 0
-```
+1. WHEN Shell_ScriptをKiroでレビューするとき、THE Kiro SHALL Linuxシェルのベストプラクティスに反する記述を検出して指摘する。
+2. WHEN Shell_ScriptをKiroでレビューするとき、THE Kiro SHALL セキュリティリスク（権限設定の誤り・インジェクションリスク・SSH/SCP接続情報のハードコード等）を検出して報告する。
+3. WHEN Kiroが品質チェック結果を報告したとき、THE Dev_Team SHALL 指摘内容を確認し、必要な修正を判断して適用する。
+4. THE Dev_Team SHALL Kiroのレビュー結果を無条件に採用せず、人によるレビュー・確認を必ず実施する。
