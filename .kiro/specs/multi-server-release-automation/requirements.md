@@ -225,6 +225,7 @@
 5. WHEN 試験が完了したとき、THE Dev_Team SHALL 上記3種のログをKiroに入力し、証跡として整理・記録する。そのうえでTest_Sheetの合否を記録する。
 6. IF 試験結果が期待値と異なる場合、THEN THE Dev_Team SHALL 原因を調査してShell_Scriptを修正し、再試験を実施する。
 7. THE Dev_Team SHALL CommandA.sh（サーバA上）の単体試験に加えて、CommandB.sh（サーバB上で直接実行）の単体試験を個別に実施し、複数サーバ結合試験前に各シェルの動作を検証する。
+8. THE Dev_Team SHALL release_all.shの単体試験として、接続情報読み込み・SSH接続確認・SCP転送・リモート実行の各関数を個別に検証し、結合試験前にオーケストレーターの各機能の動作を確認する。
 
 ---
 
