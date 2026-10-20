@@ -106,9 +106,13 @@ load_config() {
 
     # 実行時引数から接続情報を取得
     # 使用方法: bash release_all.sh <ホスト名> <ユーザー名> <秘密鍵パス>
-    if [ $# -ge 3 ]; then
+    if [ $# -ge 1 ]; then
         SERVER_B_HOST="$1"
+    fi
+    if [ $# -ge 2 ]; then
         SERVER_B_USER="$2"
+    fi
+    if [ $# -ge 3 ]; then
         SERVER_B_KEY="$3"
     fi
 
@@ -219,8 +223,8 @@ exec_server_b() {
     local out rc
     log_info "サーバBリモート実行 開始"
 
-    log_cmd "ssh -o StrictHostKeyChecking=no -i ${SERVER_B_KEY} ${SERVER_B_USER}@${SERVER_B_HOST} \"bash ${REMOTE_SCRIPT_DIR}/CommandB.sh\""
-    out=$(ssh -o StrictHostKeyChecking=no -i "${SERVER_B_KEY}" "${SERVER_B_USER}@${SERVER_B_HOST}" "bash ${REMOTE_SCRIPT_DIR}/CommandB.sh" 2>&1)
+    log_cmd "ssh -o StrictHostKeyChecking=no -i ${SERVER_B_KEY} ${SERVER_B_USER}@${SERVER_B_HOST} \"sudo bash ${REMOTE_SCRIPT_DIR}/CommandB.sh\""
+    out=$(ssh -o StrictHostKeyChecking=no -i "${SERVER_B_KEY}" "${SERVER_B_USER}@${SERVER_B_HOST}" "sudo bash ${REMOTE_SCRIPT_DIR}/CommandB.sh" 2>&1)
     rc=$?
     log_rc "${rc}"
 
