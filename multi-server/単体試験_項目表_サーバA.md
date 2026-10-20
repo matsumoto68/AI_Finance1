@@ -47,12 +47,12 @@
 
 | No | 試験観点 | 試験項目 | 実行コマンド / 操作 | 期待するRC | 期待する出力/動作 | 実際のRC | 実際の出力 | 実施日 | 対応者 | 確認者 | 合否 | 備考 |
 |----|---------|---------|------------------|-----------|----------------|---------|-----------|--------|--------|--------|------|------|
-| E-01 | ログディレクトリ自動作成 | `/var/log/release/` が存在しない場合に自動作成されること | `bash CommandA.sh` 実行後 `ls -la /var/log/release/` | 0 | `/var/log/release/` が存在する | | | | | | | 初回実行時に確認 |
-| E-02 | systemctl コマンド存在確認 | `systemctl` コマンドが使用可能な環境であること | `command -v systemctl` | 0 | systemctl のフルパスが表示される | | | | | | | |
-| E-03 | シェル実行ログ生成 | シェル実行後にシェル実行ログが1件生成されること | `ls /var/log/release/CommandA_*.log` | 0 | ログファイルが1件生成されている | | | | | | | |
-| E-04 | 詳細ログ生成 | シェル実行後に詳細ログが1件生成されること | `ls /var/log/release/CommandA_detail_*.log` | 0 | 詳細ログファイルが1件生成されている | | | | | | | |
-| E-05 | ログファイル命名規則 | ログファイル名が `CommandA_YYYYMMDDHHMMSS.log` 形式であること | `ls /var/log/release/CommandA_*.log` | 0 | ファイル名が `CommandA_YYYYMMDDHHMMSS.log` 形式（14桁の日時）である | | | | | | | |
-| E-06 | ログヘッダー出力 | ログヘッダーにスクリプト名と実行開始日時が記録されること | `head -5 /var/log/release/CommandA_*.log` | 0 | `スクリプト名: CommandA.sh` と実行開始日時が含まれる | | | | | | | |
+| E-01 | ログディレクトリ自動作成 | `/var/log/release/` が存在しない場合に自動作成されること | `bash CommandA.sh` 実行後 `ls -la /var/log/release/` | 0 | `/var/log/release/` が存在する | 0 | `/var/log/release/` が存在することを確認 | 2026-10-20 | Kiro | - | ○ | 初回実行時に確認 |
+| E-02 | systemctl コマンド存在確認 | `systemctl` コマンドが使用可能な環境であること | `command -v systemctl` | 0 | systemctl のフルパスが表示される | 0 | `[INFO] 事前チェック完了` がログに出力された | 2026-10-20 | Kiro | - | ○ | |
+| E-03 | シェル実行ログ生成 | シェル実行後にシェル実行ログが1件生成されること | `ls /var/log/release/CommandA_*.log` | 0 | ログファイルが1件生成されている | 0 | `CommandA_20261020081340.log` が生成された | 2026-10-20 | Kiro | - | ○ | |
+| E-04 | 詳細ログ生成 | シェル実行後に詳細ログが1件生成されること | `ls /var/log/release/CommandA_detail_*.log` | 0 | 詳細ログファイルが1件生成されている | 0 | `CommandA_detail_20261020081340.log` が生成された | 2026-10-20 | Kiro | - | ○ | |
+| E-05 | ログファイル命名規則 | ログファイル名が `CommandA_YYYYMMDDHHMMSS.log` 形式であること | `ls /var/log/release/CommandA_*.log` | 0 | ファイル名が `CommandA_YYYYMMDDHHMMSS.log` 形式（14桁の日時）である | 0 | `CommandA_20261020081340.log`（14桁）形式を確認 | 2026-10-20 | Kiro | - | ○ | |
+| E-06 | ログヘッダー出力 | ログヘッダーにスクリプト名と実行開始日時が記録されること | `head -5 /var/log/release/CommandA_*.log` | 0 | `スクリプト名: CommandA.sh` と実行開始日時が含まれる | 0 | `スクリプト名: CommandA.sh` / `実行開始日時: 2026-10-20 08:13:40` を確認 | 2026-10-20 | Kiro | - | ○ | |
 
 ---
 
@@ -60,15 +60,15 @@
 
 | No | 試験観点 | 試験項目 | 実行コマンド / 操作 | 期待するRC | 期待する出力/動作 | 実際のRC | 実際の出力 | 実施日 | 対応者 | 確認者 | 合否 | 備考 |
 |----|---------|---------|------------------|-----------|----------------|---------|-----------|--------|--------|--------|------|------|
-| D-01 | ディレクトリ作成（正常） | 指定パスにディレクトリが正常に作成されること | `mkdir /tmp/testdir` 実行後 `ls -la /tmp/testdir` | 0 | `/tmp/testdir` が作成されている | | | | | | | |
-| D-02 | ディレクトリ作成（既存・エラー確認） | 既存ディレクトリへの作成時に `File exists` が出力され、シェルが異常終了しないこと | 既存の `/tmp/testdir` に対して `mkdir /tmp/testdir` を実行 | 1 | `File exists` が出力される／シェルは異常終了せず次ステップへ続行する | | | | | | | |
-| D-03 | ディレクトリ作成（権限なし・エラー確認） | 権限のないパスへの作成時に `Permission denied` が出力され、シェルが異常終了しないこと | `mkdir /root/noperm` を実行 | 1 | `Permission denied` が出力される／シェルは異常終了せず次ステップへ続行する | | | | | | | |
-| D-04 | ディレクトリ移動（正常） | 指定パスへのカレントディレクトリ移動が正常に行われること | `cd /tmp/testdir` 実行後 `pwd` | 0 | カレントディレクトリが `/tmp/testdir` になっている | | | | | | | |
-| D-05 | ディレクトリ移動（不存在・エラー確認） | 存在しないパスへの移動時に `No such file or directory` が出力され、シェルが異常終了しないこと | `cd /tmp/notexist` を実行 | 1 | `No such file or directory` が出力される／シェルは異常終了せず次ステップへ続行する | | | | | | | |
-| D-06 | ディレクトリコピー | ディレクトリがサブディレクトリ含め正常にコピーされること | `cp -r /tmp/testdir /tmp/testdir_bk` 実行後 `ls -la /tmp/testdir_bk` | 0 | `/tmp/testdir_bk` が作成されている | | | | | | | |
-| D-07 | ディレクトリ削除（空） | 空ディレクトリが正常に削除されること | `rmdir /tmp/testdir_bk` 実行後 `ls /tmp/testdir_bk 2>&1` | 0 | ディレクトリが削除されている | | | | | | | |
-| D-08 | ディレクトリ削除（非空・エラー確認） | ファイルを含むディレクトリへの rmdir 実行時に `Directory not empty` が出力され、シェルが異常終了しないこと | ファイルを含む `/tmp/testdir` に対して `rmdir /tmp/testdir` を実行 | 1 | `Directory not empty` が出力される／シェルは異常終了せず次ステップへ続行する | | | | | | | ステップ8前処理で dummy.txt を作成し非空状態にして実施 |
-| D-09 | ディレクトリ強制削除 | ファイルを含むディレクトリが `-rf` オプションで強制削除されること | `rm -rf /tmp/testdir` 実行後 `ls /tmp/testdir 2>&1` | 0 | ディレクトリが削除されている | | | | | | | |
+| D-01 | ディレクトリ作成（正常） | 指定パスにディレクトリが正常に作成されること | `mkdir /tmp/testdir` 実行後 `ls -la /tmp/testdir` | 0 | `/tmp/testdir` が作成されている | 0 | `[INFO] ディレクトリ作成完了: /tmp/testdir` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| D-02 | ディレクトリ作成（既存・エラー確認） | 既存ディレクトリへの作成時に `File exists` が出力され、シェルが異常終了しないこと | 既存の `/tmp/testdir` に対して `mkdir /tmp/testdir` を実行 | 1 | `File exists` が出力される／シェルは異常終了せず次ステップへ続行する | 1 | RC=1、`File exists` 出力を確認。シェルは続行し `[INFO] ディレクトリ作成（既存）エラー確認完了` を出力 | 2026-10-20 | Kiro | - | ○ | |
+| D-03 | ディレクトリ作成（権限なし・エラー確認） | 権限のないパスへの作成時に `Permission denied` が出力され、シェルが異常終了しないこと | `mkdir /root/noperm` を実行 | 1 | `Permission denied` が出力される／シェルは異常終了せず次ステップへ続行する | 1 | RC=1、`Permission denied` 出力を確認。シェルは続行 | 2026-10-20 | Kiro | - | ○ | ec2-userで実行 |
+| D-04 | ディレクトリ移動（正常） | 指定パスへのカレントディレクトリ移動が正常に行われること | `cd /tmp/testdir` 実行後 `pwd` | 0 | カレントディレクトリが `/tmp/testdir` になっている | 0 | RC=0、`[INFO] ディレクトリ移動完了: /tmp/testdir` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| D-05 | ディレクトリ移動（不存在・エラー確認） | 存在しないパスへの移動時に `No such file or directory` が出力され、シェルが異常終了しないこと | `cd /tmp/notexist` を実行 | 1 | `No such file or directory` が出力される／シェルは異常終了せず次ステップへ続行する | 1 | RC=1、`No such file or directory` 出力を確認。シェルは続行 | 2026-10-20 | Kiro | - | ○ | |
+| D-06 | ディレクトリコピー | ディレクトリがサブディレクトリ含め正常にコピーされること | `cp -r /tmp/testdir /tmp/testdir_bk` 実行後 `ls -la /tmp/testdir_bk` | 0 | `/tmp/testdir_bk` が作成されている | 0 | RC=0、`[INFO] ディレクトリコピー完了: /tmp/testdir_bk` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| D-07 | ディレクトリ削除（空） | 空ディレクトリが正常に削除されること | `rmdir /tmp/testdir_bk` 実行後 `ls /tmp/testdir_bk 2>&1` | 0 | ディレクトリが削除されている | 0 | RC=0、`[INFO] ディレクトリ削除（空）完了: /tmp/testdir_bk` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| D-08 | ディレクトリ削除（非空・エラー確認） | ファイルを含むディレクトリへの rmdir 実行時に `Directory not empty` が出力され、シェルが異常終了しないこと | ファイルを含む `/tmp/testdir` に対して `rmdir /tmp/testdir` を実行 | 1 | `Directory not empty` が出力される／シェルは異常終了せず次ステップへ続行する | 1 | RC=1、`Directory not empty` 出力を確認。シェルは続行 | 2026-10-20 | Kiro | - | ○ | ステップ8前処理で dummy.txt を作成し非空状態にして実施 |
+| D-09 | ディレクトリ強制削除 | ファイルを含むディレクトリが `-rf` オプションで強制削除されること | `rm -rf /tmp/testdir` 実行後 `ls /tmp/testdir 2>&1` | 0 | ディレクトリが削除されている | 0 | RC=0、`[INFO] ディレクトリ強制削除完了: /tmp/testdir` を確認 | 2026-10-20 | Kiro | - | ○ | |
 
 ---
 
@@ -76,16 +76,16 @@
 
 | No | 試験観点 | 試験項目 | 実行コマンド / 操作 | 期待するRC | 期待する出力/動作 | 実際のRC | 実際の出力 | 実施日 | 対応者 | 確認者 | 合否 | 備考 |
 |----|---------|---------|------------------|-----------|----------------|---------|-----------|--------|--------|--------|------|------|
-| F-00 | WORK_DIR 再作成 | proc_dir で削除した WORK_DIR が proc_file 開始時に自動再作成されること | proc_dir 完了後 `ls -la /tmp/testdir` | 0 | `/tmp/testdir` が自動再作成されている | | | | | | | |
-| F-01 | ファイル作成（touch） | touch コマンドで空ファイルが正常に作成されること | `touch /tmp/testdir/test.txt` 実行後 `ls -la /tmp/testdir/test.txt` | 0 | `/tmp/testdir/test.txt` が作成されている | | | | | | | |
-| F-02 | ファイル作成（echo） | echo リダイレクトでファイルが作成され内容が書き込まれること | `echo hello > /tmp/testdir/data.txt` 実行後 `ls -la /tmp/testdir/data.txt` | 0 | `/tmp/testdir/data.txt` が作成されている | | | | | | | |
-| F-03 | ファイル内容確認 | cat で読み込んだファイル内容に期待する文字列が含まれること | `cat /tmp/testdir/data.txt` | 0 | `hello` が出力される | | | | | | | |
-| F-04 | ファイルコピー | ファイルが正常にコピーされること | `cp /tmp/testdir/data.txt /tmp/testdir/data_bk.txt` 実行後確認 | 0 | `/tmp/testdir/data_bk.txt` が作成されている | | | | | | | |
-| F-05 | ファイルコピー（上書き） | `-f` オプションで既存ファイルへの上書きコピーが正常に行われること | `cp -f /tmp/testdir/data.txt /tmp/testdir/data_bk.txt` | 0 | 差分なし（上書きコピーが成功している） | | | | | | | |
-| F-06 | ファイル移動（リネーム） | ファイルが移動（リネーム）され、移動元が消え移動先が作成されること | `mv /tmp/testdir/test.txt /tmp/testdir/renamed.txt` 実行後確認 | 0 | `test.txt` が存在せず `renamed.txt` が存在する | | | | | | | |
-| F-07 | ファイル削除 | 指定ファイルが正常に削除されること | `rm /tmp/testdir/data_bk.txt` 実行後確認 | 0 | ファイルが削除されている | | | | | | | |
-| F-08 | ファイル削除（不存在・エラー確認） | 存在しないファイルへの rm 実行時に `No such file or directory` が出力され、シェルが異常終了しないこと | 存在しない `/tmp/testdir/notexist.txt` に対して `rm` を実行 | 1 | `No such file or directory` が出力される／シェルは異常終了せず次ステップへ続行する | | | | | | | |
-| F-09 | 作業ディレクトリ強制削除 | proc_file 末尾で `/tmp/testdir` が強制削除されゴミファイルが残らないこと | `rm -rf /tmp/testdir` 実行後確認 | 0 | ディレクトリが削除されている | | | | | | | |
+| F-00 | WORK_DIR 再作成 | proc_dir で削除した WORK_DIR が proc_file 開始時に自動再作成されること | proc_dir 完了後 `ls -la /tmp/testdir` | 0 | `/tmp/testdir` が自動再作成されている | 0 | RC=0、`[INFO] ファイル操作処理 開始` 後に処理が続行されたことを確認 | 2026-10-20 | Kiro | - | ○ | |
+| F-01 | ファイル作成（touch） | touch コマンドで空ファイルが正常に作成されること | `touch /tmp/testdir/test.txt` 実行後 `ls -la /tmp/testdir/test.txt` | 0 | `/tmp/testdir/test.txt` が作成されている | 0 | RC=0、`[INFO] ファイル作成（touch）完了: /tmp/testdir/test.txt` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| F-02 | ファイル作成（echo） | echo リダイレクトでファイルが作成され内容が書き込まれること | `echo hello > /tmp/testdir/data.txt` 実行後 `ls -la /tmp/testdir/data.txt` | 0 | `/tmp/testdir/data.txt` が作成されている | 0 | RC=0、`[INFO] ファイル作成（echo）完了: /tmp/testdir/data.txt` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| F-03 | ファイル内容確認 | cat で読み込んだファイル内容に期待する文字列が含まれること | `cat /tmp/testdir/data.txt` | 0 | `hello` が出力される | 0 | RC=0、`hello` が含まれることを確認。`[INFO] ファイル内容確認完了` を出力 | 2026-10-20 | Kiro | - | ○ | |
+| F-04 | ファイルコピー | ファイルが正常にコピーされること | `cp /tmp/testdir/data.txt /tmp/testdir/data_bk.txt` 実行後確認 | 0 | `/tmp/testdir/data_bk.txt` が作成されている | 0 | RC=0、`[INFO] ファイルコピー完了: /tmp/testdir/data_bk.txt` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| F-05 | ファイルコピー（上書き） | `-f` オプションで既存ファイルへの上書きコピーが正常に行われること | `cp -f /tmp/testdir/data.txt /tmp/testdir/data_bk.txt` | 0 | 差分なし（上書きコピーが成功している） | 0 | RC=0、`[INFO] ファイルコピー（上書き）完了: /tmp/testdir/data_bk.txt` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| F-06 | ファイル移動（リネーム） | ファイルが移動（リネーム）され、移動元が消え移動先が作成されること | `mv /tmp/testdir/test.txt /tmp/testdir/renamed.txt` 実行後確認 | 0 | `test.txt` が存在せず `renamed.txt` が存在する | 0 | RC=0、`[INFO] ファイル移動（リネーム）完了: /tmp/testdir/renamed.txt` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| F-07 | ファイル削除 | 指定ファイルが正常に削除されること | `rm /tmp/testdir/data_bk.txt` 実行後確認 | 0 | ファイルが削除されている | 0 | RC=0、`[INFO] ファイル削除完了: /tmp/testdir/data_bk.txt` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| F-08 | ファイル削除（不存在・エラー確認） | 存在しないファイルへの rm 実行時に `No such file or directory` が出力され、シェルが異常終了しないこと | 存在しない `/tmp/testdir/notexist.txt` に対して `rm` を実行 | 1 | `No such file or directory` が出力される／シェルは異常終了せず次ステップへ続行する | 1 | RC=1、`No such file or directory` 出力を確認。シェルは続行 | 2026-10-20 | Kiro | - | ○ | |
+| F-09 | 作業ディレクトリ強制削除 | proc_file 末尾で `/tmp/testdir` が強制削除されゴミファイルが残らないこと | `rm -rf /tmp/testdir` 実行後確認 | 0 | ディレクトリが削除されている | 0 | RC=0、`[INFO] 作業ディレクトリ強制削除完了: /tmp/testdir` を確認 | 2026-10-20 | Kiro | - | ○ | |
 
 ---
 
@@ -96,12 +96,12 @@
 
 | No | 試験観点 | 試験項目 | 実行コマンド / 操作 | 期待するRC | 期待する出力/動作 | 実際のRC | 実際の出力 | 実施日 | 対応者 | 確認者 | 合否 | 備考 |
 |----|---------|---------|------------------|-----------|----------------|---------|-----------|--------|--------|--------|------|------|
-| S-01 | サービス起動 | `systemctl start` でサービスが正常に起動すること | `systemctl start nginx` | 0 | nginx が起動し `active` が出力される | | | | | | | |
-| S-02 | サービス起動失敗確認（Failed なし） | 起動済みサービスへの再起動コマンド実行時に `Failed` が出力されず、シェルが異常終了しないこと | 起動済み nginx に対して再度 `systemctl start nginx` を実行 | 0 | 出力に `Failed` が含まれない／シェルは続行する | | | | | | | |
-| S-03 | 起動確認 | `is-active` コマンドでサービスが active 状態であることが確認できること | `systemctl is-active nginx` | 0 | `active` が出力される | | | | | | | |
-| S-04 | サービス停止 | `systemctl stop` でサービスが正常に停止すること | `systemctl stop nginx` | 0 | nginx が停止する | | | | | | | |
-| S-05 | 停止確認 | `is-active` コマンドで inactive 状態が確認でき RC=3 が返ること | `systemctl is-active nginx`（停止後） | 3 | `inactive` が出力される | | | | | | | |
-| S-06 | サービス状態確認 | `status` コマンドの出力に `Active:` 行が含まれること | `systemctl status nginx` | - | 出力に `Active:` の行が含まれる | | | | | | | RC は状態により変わるため `-` |
+| S-01 | サービス起動 | `systemctl start` でサービスが正常に起動すること | `systemctl start nginx` | 0 | nginx が起動し `active` が出力される | 0 | RC=0、`[INFO] サービス起動完了: nginx` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| S-02 | サービス起動失敗確認（Failed なし） | 起動済みサービスへの再起動コマンド実行時に `Failed` が出力されず、シェルが異常終了しないこと | 起動済み nginx に対して再度 `systemctl start nginx` を実行 | 0 | 出力に `Failed` が含まれない／シェルは続行する | 0 | RC=0、出力に `Failed` なし。`[INFO] サービス起動失敗確認完了` を出力 | 2026-10-20 | Kiro | - | ○ | |
+| S-03 | 起動確認 | `is-active` コマンドでサービスが active 状態であることが確認できること | `systemctl is-active nginx` | 0 | `active` が出力される | 0 | RC=0、`active` 出力を確認。`[INFO] 起動確認完了: nginx` を出力 | 2026-10-20 | Kiro | - | ○ | |
+| S-04 | サービス停止 | `systemctl stop` でサービスが正常に停止すること | `systemctl stop nginx` | 0 | nginx が停止する | 0 | RC=0、`[INFO] サービス停止完了: nginx` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| S-05 | 停止確認 | `is-active` コマンドで inactive 状態が確認でき RC=3 が返ること | `systemctl is-active nginx`（停止後） | 3 | `inactive` が出力される | 3 | RC=3、`inactive` 出力を確認。`[INFO] 停止確認完了: nginx` を出力 | 2026-10-20 | Kiro | - | ○ | |
+| S-06 | サービス状態確認 | `status` コマンドの出力に `Active:` 行が含まれること | `systemctl status nginx` | - | 出力に `Active:` の行が含まれる | 3 | RC=3（停止状態）、出力に `Active:` 行が含まれることを確認 | 2026-10-20 | Kiro | - | ○ | RC は状態により変わるため `-` |
 
 ---
 
@@ -109,9 +109,9 @@
 
 | No | 試験観点 | 試験項目 | 実行コマンド / 操作 | 期待するRC | 期待する出力/動作 | 実際のRC | 実際の出力 | 実施日 | 対応者 | 確認者 | 合否 | 備考 |
 |----|---------|---------|------------------|-----------|----------------|---------|-----------|--------|--------|--------|------|------|
-| M-01 | 一覧表示 | `ls -la` の出力に `total` 行が含まれること | `ls -la /tmp` | 0 | 出力に `total` で始まる行が含まれる | | | | | | | |
-| M-02 | ファイル権限変更 | `chmod 755` でファイルに実行権限が正常に付与されること | `chmod 755 /tmp/testfile.sh` 実行後 `ls -la /tmp/testfile.sh` | 0 | パーミッション表示が `-rwxr-xr-x` になっている | | | | | | | |
-| M-03 | 権限変更前後の差異 | 権限変更前後でパーミッションが 644→755 に変化していること | 変更前後の `ls -la /tmp/testfile.sh` 出力を比較 | - | 変更前 `-rw-r--r--`（644）→ 変更後 `-rwxr-xr-x`（755） | | | | | | | |
+| M-01 | 一覧表示 | `ls -la` の出力に `total` 行が含まれること | `ls -la /tmp` | 0 | 出力に `total` で始まる行が含まれる | 0 | RC=0、`total` 行を確認。`[INFO] 一覧表示完了: /tmp` を出力 | 2026-10-20 | Kiro | - | ○ | |
+| M-02 | ファイル権限変更 | `chmod 755` でファイルに実行権限が正常に付与されること | `chmod 755 /tmp/testfile.sh` 実行後 `ls -la /tmp/testfile.sh` | 0 | パーミッション表示が `-rwxr-xr-x` になっている | 0 | RC=0、`[INFO] ファイル権限変更完了: /tmp/testfile.sh -> 755` を確認 | 2026-10-20 | Kiro | - | ○ | |
+| M-03 | 権限変更前後の差異 | 権限変更前後でパーミッションが 644→755 に変化していること | 変更前後の `ls -la /tmp/testfile.sh` 出力を比較 | - | 変更前 `-rw-r--r--`（644）→ 変更後 `-rwxr-xr-x`（755） | - | 644→755 の変化を確認 | 2026-10-20 | Kiro | - | ○ | |
 
 ---
 
@@ -119,8 +119,8 @@
 
 | No | 試験観点 | 試験項目 | 実行コマンド / 操作 | 期待するRC | 期待する出力/動作 | 実際のRC | 実際の出力 | 実施日 | 対応者 | 確認者 | 合否 | 備考 |
 |----|---------|---------|------------------|-----------|----------------|---------|-----------|--------|--------|--------|------|------|
-| A-01 | E001 異常終了（ログDIR書き込み不可） | ログディレクトリへの書き込みが不可な場合に E001 エラーで RC=1 異常終了すること | `/var/log/release` を `chmod 444` してから `bash CommandA.sh` | 1 | `[ERROR] E001: ログディレクトリ書き込み権限なし` が出力され RC=1 で終了する | | | | | | | 試験後に `chmod 755` で権限復元 |
-| A-02 | E002 異常終了（systemctl 不存在） | `systemctl` が存在しない環境で E002 エラーで RC=1 異常終了すること | `systemctl` を一時退避して `bash CommandA.sh` | 1 | `[ERROR] E002: systemctl コマンド不存在` が出力され RC=1 で終了する | | | | | | | 試験後にsystemctl復元 |
+| A-01 | E001 異常終了（ログDIR書き込み不可） | ログディレクトリへの書き込みが不可な場合に E001 エラーで RC=1 異常終了すること | `/var/log/release` を `chmod 444` してから `bash CommandA.sh` | 1 | `[ERROR] E001: ログディレクトリ書き込み権限なし` が出力され RC=1 で終了する | 1 | `[ERROR] E001: ログディレクトリ書き込み権限なし: /var/log/release` が出力されRC=1で異常終了 | 2026-10-20 | Kiro | - | ○ | ec2-userで実行。試験後に `chmod 755` で権限復元済み |
+| A-02 | E002 異常終了（systemctl 不存在） | `systemctl` が存在しない環境で E002 エラーで RC=1 異常終了すること | `systemctl` を一時退避して `bash CommandA.sh` | 1 | `[ERROR] E002: systemctl コマンド不存在` が出力され RC=1 で終了する | 1 | `[ERROR] E002: systemctl コマンド不存在` が記録されRC=1で異常終了 | 2026-10-20 | Kiro | - | ○ | systemctl一時退避後に実行。試験後にsystemctl復元済み |
 
 ---
 
@@ -128,11 +128,11 @@
 
 | No | 試験観点 | 試験項目 | 確認方法 | 期待する動作 | 実際の動作 | 実施日 | 対応者 | 確認者 | 合否 | 備考 |
 |----|---------|---------|---------|------------|-----------|--------|--------|--------|------|------|
-| Z-01 | シェル正常終了（RC=0） | シェル全体が RC=0 で正常終了すること | `echo $?`（CommandA.sh 実行直後） | `0` が出力される | | | | | | |
-| Z-02 | 正常終了ログ記録 | 正常終了メッセージがシェル実行ログに記録されること | `grep "処理正常終了" /var/log/release/CommandA_*.log` | `[INFO]  CommandA.sh 処理正常終了` が記録されている | | | | | | |
-| Z-03 | CMD ログ件数（27件） | 全コマンドの CMD ログが 27 件記録されていること | `grep "\[CMD\]" /var/log/release/CommandA_detail_*.log \| wc -l` | 27 件 | | | | | | |
-| Z-04 | RC ログ件数（CMD と 1対1） | CMD ログと RC ログが 1対1 で記録されていること | `grep "\[RC\]" /var/log/release/CommandA_detail_*.log \| wc -l` | 27 件 | | | | | | |
-| Z-05 | ERROR ログ未出力（正常時） | 正常実行時に ERROR ログが出力されていないこと | `grep "\[ERROR\]" /var/log/release/CommandA_*.log` | 0 件 | | | | | | |
+| Z-01 | シェル正常終了（RC=0） | シェル全体が RC=0 で正常終了すること | `echo $?`（CommandA.sh 実行直後） | `0` が出力される | `0` が出力された | 2026-10-20 | Kiro | - | ○ | |
+| Z-02 | 正常終了ログ記録 | 正常終了メッセージがシェル実行ログに記録されること | `grep "処理正常終了" /var/log/release/CommandA_*.log` | `[INFO]  CommandA.sh 処理正常終了` が記録されている | `[2026-10-20 08:13:40] [INFO]  CommandA.sh 処理正常終了` が記録されていた | 2026-10-20 | Kiro | - | ○ | |
+| Z-03 | CMD ログ件数（27件） | 全コマンドの CMD ログが 27 件記録されていること | `grep "\[CMD\]" /var/log/release/CommandA_detail_*.log \| wc -l` | 27 件 | 27件を確認 | 2026-10-20 | Kiro | - | ○ | |
+| Z-04 | RC ログ件数（CMD と 1対1） | CMD ログと RC ログが 1対1 で記録されていること | `grep "\[RC\]" /var/log/release/CommandA_detail_*.log \| wc -l` | 27 件 | 27件を確認 | 2026-10-20 | Kiro | - | ○ | |
+| Z-05 | ERROR ログ未出力（正常時） | 正常実行時に ERROR ログが出力されていないこと | `grep "\[ERROR\]" /var/log/release/CommandA_*.log` | 0 件 | 0件を確認 | 2026-10-20 | Kiro | - | ○ | |
 
 ---
 
@@ -140,8 +140,8 @@
 
 | 証跡種別 | ファイル名 | 取得方法 |
 |---------|-----------|---------|
-| シェル実行ログ（正常系） | `UT試験Log/UT正常系/CommandA_YYYYMMDDHHMMSS.log` | 試験実施後に取得 |
-| 詳細ログ（正常系） | `UT試験Log/UT正常系/CommandA_detail_YYYYMMDDHHMMSS.log` | 試験実施後に取得 |
-| A-01証跡（標準エラー） | `UT試験Log/UT異常系/CommandA_A01_stderr.log` | stderrリダイレクトで取得 |
-| シェル実行ログ（A-02異常系） | `UT試験Log/UT異常系/CommandA_YYYYMMDDHHMMSS.log` | 試験実施後に取得 |
-| 詳細ログ（A-02異常系） | `UT試験Log/UT異常系/CommandA_detail_YYYYMMDDHHMMSS.log` | 試験実施後に取得 |
+| シェル実行ログ（正常系） | `UT試験Log/UT正常系/CommandA_20261020081340.log` | サーバAから取得済み |
+| 詳細ログ（正常系） | `UT試験Log/UT正常系/CommandA_detail_20261020081340.log` | サーバAから取得済み |
+| A-01証跡（標準エラー） | `UT試験Log/UT異常系/CommandA_A01_stderr.log` | stderrリダイレクトで取得済み |
+| シェル実行ログ（A-02異常系） | `UT試験Log/UT異常系/CommandA_20261020082116.log` | サーバAから取得済み |
+| 詳細ログ（A-02異常系） | `UT試験Log/UT異常系/CommandA_detail_20261020082116.log` | サーバAから取得済み |
